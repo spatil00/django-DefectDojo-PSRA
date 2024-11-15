@@ -7,7 +7,6 @@ import logging
 import mimetypes
 from collections import OrderedDict, defaultdict
 from itertools import chain
-from typing import Optional
 
 from django.conf import settings
 from django.contrib import messages
@@ -266,9 +265,9 @@ class BaseListFindings:
     def __init__(
         self,
         filter_name: str = "All",
-        product_id: Optional[int] = None,
-        engagement_id: Optional[int] = None,
-        test_id: Optional[int] = None,
+        product_id: int | None = None,
+        engagement_id: int | None = None,
+        test_id: int | None = None,
         order_by: str = "numerical_severity",
         prefetch_type: str = "all",
     ):
@@ -312,33 +311,31 @@ class BaseListFindings:
     def filter_findings_by_object(self, findings: QuerySet[Finding]):
         if product_id := self.get_product_id():
             return findings.filter(test__engagement__product__id=product_id)
-        elif engagement_id := self.get_engagement_id():
+        if engagement_id := self.get_engagement_id():
             return findings.filter(test__engagement=engagement_id)
-        elif test_id := self.get_test_id():
+        if test_id := self.get_test_id():
             return findings.filter(test=test_id)
-        else:
-            return findings
+        return findings
 
     def filter_findings_by_filter_name(self, findings: QuerySet[Finding]):
         filter_name = self.get_filter_name()
         if filter_name == "Open":
             return findings.filter(finding_helper.OPEN_FINDINGS_QUERY)
-        elif filter_name == "Verified":
+        if filter_name == "Verified":
             return findings.filter(finding_helper.VERIFIED_FINDINGS_QUERY)
-        elif filter_name == "Out of Scope":
+        if filter_name == "Out of Scope":
             return findings.filter(finding_helper.OUT_OF_SCOPE_FINDINGS_QUERY)
-        elif filter_name == "False Positive":
+        if filter_name == "False Positive":
             return findings.filter(finding_helper.FALSE_POSITIVE_FINDINGS_QUERY)
-        elif filter_name == "Inactive":
+        if filter_name == "Inactive":
             return findings.filter(finding_helper.INACTIVE_FINDINGS_QUERY)
-        elif filter_name == "Accepted":
+        if filter_name == "Accepted":
             return findings.filter(finding_helper.ACCEPTED_FINDINGS_QUERY)
         elif filter_name == "Assessed":
             return findings.filter(finding_helper.ASSESSED_FINDINGS_QUERY)
-        elif filter_name == "Closed":
+        if filter_name == "Closed":
             return findings.filter(finding_helper.CLOSED_FINDINGS_QUERY)
-        else:
-            return findings
+        return findings
 
     def filter_findings_by_form(self, request: HttpRequest, findings: QuerySet[Finding]):
         # Set up the args for the form
@@ -361,9 +358,7 @@ class BaseListFindings:
     def get_filtered_findings(self):
         findings = get_authorized_findings(Permissions.Finding_View).order_by(self.get_order_by())
         findings = self.filter_findings_by_object(findings)
-        findings = self.filter_findings_by_filter_name(findings)
-
-        return findings
+        return self.filter_findings_by_filter_name(findings)
 
     def get_fully_filtered_findings(self, request: HttpRequest):
         findings = self.get_filtered_findings()
@@ -427,7 +422,7 @@ class ListFindings(View, BaseListFindings):
 
         return request, context
 
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int | None = None, engagement_id: int | None = None):
         # Store the product and engagement ids
         self.product_id = product_id
         self.engagement_id = engagement_id
@@ -453,37 +448,37 @@ class ListFindings(View, BaseListFindings):
 
 
 class ListOpenFindings(ListFindings):
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int | None = None, engagement_id: int | None = None):
         self.filter_name = "Open"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
 
 class ListVerifiedFindings(ListFindings):
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int | None = None, engagement_id: int | None = None):
         self.filter_name = "Verified"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
 
 class ListOutOfScopeFindings(ListFindings):
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int | None = None, engagement_id: int | None = None):
         self.filter_name = "Out of Scope"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
 
 class ListFalsePositiveFindings(ListFindings):
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int | None = None, engagement_id: int | None = None):
         self.filter_name = "False Positive"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
 
 class ListInactiveFindings(ListFindings):
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int | None = None, engagement_id: int | None = None):
         self.filter_name = "Inactive"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
 
 class ListAcceptedFindings(ListFindings):
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int | None = None, engagement_id: int | None = None):
         self.filter_name = "Accepted"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
@@ -493,7 +488,7 @@ class ListAssessedFindings(ListFindings):
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
 class ListClosedFindings(ListFindings):
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int | None = None, engagement_id: int | None = None):
         self.filter_name = "Closed"
         self.order_by = "-mitigated"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
@@ -1024,9 +1019,8 @@ class EditFinding(View):
             )
 
             return finding, request, True
-        else:
-            add_error_message_to_response("The form has errors, please correct them below.")
-            add_field_errors_to_response(context["form"])
+        add_error_message_to_response("The form has errors, please correct them below.")
+        add_field_errors_to_response(context["form"])
 
         return finding, request, False
 
@@ -1081,8 +1075,7 @@ class EditFinding(View):
                 )
 
             return request, True, push_to_jira
-        else:
-            add_field_errors_to_response(context["jform"])
+        add_field_errors_to_response(context["jform"])
 
         return request, False, False
 
@@ -1097,8 +1090,7 @@ class EditFinding(View):
                 add_external_issue(finding, "github")
 
             return request, True
-        else:
-            add_field_errors_to_response(context["gform"])
+        add_field_errors_to_response(context["gform"])
 
         return request, False
 
@@ -1323,10 +1315,9 @@ def close_finding(request, fid):
                 return HttpResponseRedirect(
                     reverse("view_test", args=(finding.test.id,)),
                 )
-            else:
-                return HttpResponseRedirect(
-                    reverse("close_finding", args=(finding.id,)),
-                )
+            return HttpResponseRedirect(
+                reverse("close_finding", args=(finding.id,)),
+            )
 
     product_tab = Product_Tab(
         finding.test.engagement.product, title="Close", tab="findings",
@@ -1509,15 +1500,14 @@ def apply_template_cwe(request, fid):
                 extra_tags="alert-success",
             )
             return HttpResponseRedirect(reverse("view_finding", args=(fid,)))
-        else:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Unable to apply CWE template finding, please try again.",
-                extra_tags="alert-danger",
-            )
-    else:
-        raise PermissionDenied
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Unable to apply CWE template finding, please try again.",
+            extra_tags="alert-danger",
+        )
+        return None
+    raise PermissionDenied
 
 
 @user_is_authorized(Finding, Permissions.Finding_Edit, "fid")
@@ -1556,13 +1546,12 @@ def copy_finding(request, fid):
             return redirect_to_return_url_or_else(
                 request, reverse("view_test", args=(test.id,)),
             )
-        else:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Unable to copy finding, please try again.",
-                extra_tags="alert-danger",
-            )
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Unable to copy finding, please try again.",
+            extra_tags="alert-danger",
+        )
 
     product_tab = Product_Tab(product, title="Copy Finding", tab="findings")
     return render(
@@ -2009,8 +1998,7 @@ def apply_template_to_finding(request, fid, tid):
             )
 
         return HttpResponseRedirect(reverse("view_finding", args=(finding.id,)))
-    else:
-        return HttpResponseRedirect(reverse("view_finding", args=(finding.id,)))
+    return HttpResponseRedirect(reverse("view_finding", args=(finding.id,)))
 
 
 @user_is_authorized(Test, Permissions.Finding_Add, "tid")
@@ -2070,15 +2058,14 @@ def delete_stub_finding(request, fid):
                 extra_tags="alert-success",
             )
             return HttpResponseRedirect(reverse("view_test", args=(tid,)))
-        else:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Unable to delete potential finding, please try again.",
-                extra_tags="alert-danger",
-            )
-    else:
-        raise PermissionDenied
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Unable to delete potential finding, please try again.",
+            extra_tags="alert-danger",
+        )
+        return None
+    raise PermissionDenied
 
 
 @user_is_authorized(Stub_Finding, Permissions.Finding_Edit, "fid")
@@ -2195,13 +2182,12 @@ def promote_to_finding(request, fid):
             )
 
             return HttpResponseRedirect(reverse("view_test", args=(test.id,)))
-        else:
-            form_error = True
-            add_error_message_to_response(
-                "The form has errors, please correct them below.",
-            )
-            add_field_errors_to_response(jform)
-            add_field_errors_to_response(form)
+        form_error = True
+        add_error_message_to_response(
+            "The form has errors, please correct them below.",
+        )
+        add_field_errors_to_response(jform)
+        add_field_errors_to_response(form)
     else:
         form = PromoteFindingForm(
             initial={
@@ -2363,13 +2349,12 @@ def add_template(request):
                 extra_tags="alert-success",
             )
             return HttpResponseRedirect(reverse("templates"))
-        else:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Template form has error, please revise and try again.",
-                extra_tags="alert-danger",
-            )
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Template form has error, please revise and try again.",
+            extra_tags="alert-danger",
+        )
     add_breadcrumb(title="Add Template", top_level=False, request=request)
     return render(
         request, "dojo/add_template.html", {"form": form, "name": "Add Template"},
@@ -2418,13 +2403,12 @@ def edit_template(request, tid):
                 extra_tags="alert-success",
             )
             return HttpResponseRedirect(reverse("templates"))
-        else:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Template form has error, please revise and try again.",
-                extra_tags="alert-danger",
-            )
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Template form has error, please revise and try again.",
+            extra_tags="alert-danger",
+        )
 
     count = apply_cwe_mitigation(apply_to_findings=True, template=template, update=False)
     add_breadcrumb(title="Edit Template", top_level=False, request=request)
@@ -2454,15 +2438,14 @@ def delete_template(request, tid):
                 extra_tags="alert-success",
             )
             return HttpResponseRedirect(reverse("templates"))
-        else:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Unable to delete Template, please revise and try again.",
-                extra_tags="alert-danger",
-            )
-    else:
-        raise PermissionDenied
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Unable to delete Template, please revise and try again.",
+            extra_tags="alert-danger",
+        )
+        return None
+    raise PermissionDenied
 
 
 def download_finding_pic(request, token):
@@ -2668,13 +2651,12 @@ def merge_finding_product(request, pid):
                     return HttpResponseRedirect(
                         reverse("edit_finding", args=(finding_to_merge_into.id,)),
                     )
-                else:
-                    messages.add_message(
-                        request,
-                        messages.ERROR,
-                        "Unable to merge findings. Findings to merge contained in finding to merge into.",
-                        extra_tags="alert-danger",
-                    )
+                messages.add_message(
+                    request,
+                    messages.ERROR,
+                    "Unable to merge findings. Findings to merge contained in finding to merge into.",
+                    extra_tags="alert-danger",
+                )
             else:
                 messages.add_message(
                     request,
@@ -3144,8 +3126,7 @@ def find_available_notetypes(notes):
                 break
         else:
             available_note_types.append(note_type_id)
-    queryset = Note_Type.objects.filter(id__in=available_note_types).order_by("-id")
-    return queryset
+    return Note_Type.objects.filter(id__in=available_note_types).order_by("-id")
 
 
 def get_missing_mandatory_notetypes(finding):
@@ -3160,8 +3141,7 @@ def get_missing_mandatory_notetypes(finding):
                 break
         else:
             notes_to_be_added.append(note_type_id)
-    queryset = Note_Type.objects.filter(id__in=notes_to_be_added)
-    return queryset
+    return Note_Type.objects.filter(id__in=notes_to_be_added)
 
 
 @user_is_authorized(Finding, Permissions.Finding_Edit, "original_id")

@@ -139,7 +139,7 @@ env = environ.FileAwareEnv(
     DD_SOCIAL_AUTH_GITLAB_KEY=(str, ""),
     DD_SOCIAL_AUTH_GITLAB_SECRET=(str, ""),
     DD_SOCIAL_AUTH_GITLAB_API_URL=(str, "https://gitlab.com"),
-    DD_SOCIAL_AUTH_GITLAB_SCOPE=(list, ["read_user", "openid"]),
+    DD_SOCIAL_AUTH_GITLAB_SCOPE=(list, ["read_user", "openid", "read_api", "read_repository"]),
     DD_SOCIAL_AUTH_KEYCLOAK_OAUTH2_ENABLED=(bool, False),
     DD_SOCIAL_AUTH_KEYCLOAK_KEY=(str, ""),
     DD_SOCIAL_AUTH_KEYCLOAK_SECRET=(str, ""),
@@ -276,7 +276,7 @@ env = environ.FileAwareEnv(
     DD_DELETE_PREVIEW=(bool, True),
     # List of acceptable file types that can be uploaded to a given object via arbitrary file upload
     DD_FILE_UPLOAD_TYPES=(list, [".txt", ".pdf", ".json", ".xml", ".csv", ".yml", ".png", ".jpeg",
-                                 ".sarif", ".xlsx", ".doc", ".html", ".js", ".nessus", ".zip"]),
+                                 ".sarif", ".xlsx", ".doc", ".html", ".js", ".nessus", ".zip", ".fpr"]),
     # Max file size for scan added via API in MB
     DD_SCAN_FILE_MAX_SIZE=(int, 100),
     # When disabled, existing user tokens will not be removed but it will not be
@@ -1145,6 +1145,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "dojo.risk_acceptance.helper.expiration_handler",
         "schedule": crontab(minute=0, hour="*/3"),  # every 3 hours
     },
+    "notification_webhook_status_cleanup": {
+        "task": "dojo.notifications.helper.webhook_status_cleanup",
+        "schedule": timedelta(minutes=1),
+    },
     # 'jira_status_reconciliation': {
     #     'task': 'dojo.tasks.jira_status_reconciliation_task',
     #     'schedule': timedelta(hours=12),
@@ -1154,7 +1158,6 @@ CELERY_BEAT_SCHEDULE = {
     #     'task': 'dojo.tasks.fix_loop_duplicates_task',
     #     'schedule': timedelta(hours=12)
     # },
-
 
 }
 
@@ -1198,6 +1201,7 @@ HASHCODE_FIELDS_PER_SCANNER = {
     "Anchore Grype": ["title", "severity", "component_name", "component_version"],
     "Aqua Scan": ["severity", "vulnerability_ids", "component_name", "component_version"],
     "Bandit Scan": ["file_path", "line", "vuln_id_from_tool"],
+    "Burp Enterprise Scan": ["title", "severity", "cwe"],
     "CargoAudit Scan": ["vulnerability_ids", "severity", "component_name", "component_version", "vuln_id_from_tool"],
     "Checkmarx Scan": ["cwe", "severity", "file_path"],
     "Checkmarx OSA": ["vulnerability_ids", "component_name"],
@@ -1280,6 +1284,7 @@ HASHCODE_FIELDS_PER_SCANNER = {
     "Kiuwan SCA Scan": ["description", "severity", "component_name", "component_version", "cwe"],
     "Rapplex Scan": ["title", "endpoints", "severity"],
     "AppCheck Web Application Scanner": ["title", "severity"],
+    "AWS Inspector2 Scan": ["title", "severity", "description"],
     "Legitify Scan": ["title", "endpoints", "severity"],
     "ThreatComposer Scan": ["title", "description"],
     "Invicti Scan": ["title", "description", "severity"],
@@ -1347,6 +1352,7 @@ HASHCODE_ALLOWS_NULL_CWE = {
     "Wazuh": True,
     "Nuclei Scan": True,
     "Threagile risks report": True,
+    "AWS Inspector2 Scan": True,
 }
 
 # List of fields that are known to be usable in hash_code computation)
@@ -1398,6 +1404,7 @@ DEDUPLICATION_ALGORITHM_PER_PARSER = {
     "AWS Security Finding Format (ASFF) Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "Burp REST API": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "Bandit Scan": DEDUPE_ALGO_HASH_CODE,
+    "Burp Enterprise Scan": DEDUPE_ALGO_HASH_CODE,
     "CargoAudit Scan": DEDUPE_ALGO_HASH_CODE,
     "Checkmarx Scan detailed": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "Checkmarx Scan": DEDUPE_ALGO_HASH_CODE,
@@ -1507,10 +1514,12 @@ DEDUPLICATION_ALGORITHM_PER_PARSER = {
     "Kiuwan SCA Scan": DEDUPE_ALGO_HASH_CODE,
     "Rapplex Scan": DEDUPE_ALGO_HASH_CODE,
     "AppCheck Web Application Scanner": DEDUPE_ALGO_HASH_CODE,
+    "AWS Inspector2 Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE,
     "Legitify Scan": DEDUPE_ALGO_HASH_CODE,
     "ThreatComposer Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE,
     "Invicti Scan": DEDUPE_ALGO_HASH_CODE,
     "KrakenD Audit Scan": DEDUPE_ALGO_HASH_CODE,
+    "PTART Report": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
 }
 
 # Override the hardcoded settings here via the env var
@@ -1729,6 +1738,15 @@ VULNERABILITY_URLS = {
     "RHBA": "https://access.redhat.com/errata/",
     "RHEA": "https://access.redhat.com/errata/",
     "FEDORA": "https://bodhi.fedoraproject.org/updates/",
+    "ALSA": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/ALSA-2024:0827
+    "USN": "https://ubuntu.com/security/notices/",  # e.g. https://ubuntu.com/security/notices/USN-6642-1
+    "DLA": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/DLA-3917-1
+    "ELSA": "https://linux.oracle.com/errata/&&.html",  # e.g. https://linux.oracle.com/errata/ELSA-2024-12714.html
+    "ELBA": "https://linux.oracle.com/errata/&&.html",  # e.g. https://linux.oracle.com/errata/ELBA-2024-7457.html
+    "RXSA": "https://errata.rockylinux.org/",  # e.g. https://errata.rockylinux.org/RXSA-2024:4928
+    "CAPEC": "https://capec.mitre.org/data/definitions/&&.html",  # e.g. https://capec.mitre.org/data/definitions/157.html
+    "CWE": "https://cwe.mitre.org/data/definitions/&&.html",  # e.g. https://cwe.mitre.org/data/definitions/79.html
+    "TEMP": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/TEMP-0841856-B18BAF
 }
 # List of acceptable file types that can be uploaded to a given object via arbitrary file upload
 FILE_UPLOAD_TYPES = env("DD_FILE_UPLOAD_TYPES")

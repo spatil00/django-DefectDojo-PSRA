@@ -365,6 +365,11 @@ initializer:
   # @type: array<map>
   extraVolumes: []
 
+  # staticName defines whether name of the job will be the same (e.g., "defectdojo-initializer")
+  # or different every time - generated based on current time (e.g., "defectdojo-initializer-2024-11-11-18-57")
+  # This might be handy for ArgoCD deployments
+  staticName: false
+
 postgresql:
   enabled: true
   auth:
@@ -454,7 +459,7 @@ cloudsql:
   image:
     # set repo and image tag of gce-proxy
     repository: gcr.io/cloudsql-docker/gce-proxy
-    tag: 1.37.0
+    tag: 1.37.1
     pullPolicy: IfNotPresent
   # set CloudSQL instance: 'project:zone:instancename'
   instance: ""

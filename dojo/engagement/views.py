@@ -7,7 +7,6 @@ from datetime import datetime
 from functools import reduce
 from tempfile import NamedTemporaryFile
 from time import strftime
-from typing import List, Optional, Tuple
 
 from django.conf import settings
 from django.contrib import messages
@@ -17,8 +16,8 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DEFAULT_DB_ALIAS
 from django.db.models import Count, Q
 from django.db.models.query import Prefetch, QuerySet
-from django.http import FileResponse, HttpRequest, HttpResponse, HttpResponseRedirect, QueryDict, StreamingHttpResponse
-from django.shortcuts import get_object_or_404, render, redirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, QueryDict, StreamingHttpResponse
+from django.shortcuts import get_object_or_404, render
 from django.urls import Resolver404, reverse
 from django.http import Http404, HttpResponseRedirect
 from django.utils import timezone
@@ -105,6 +104,7 @@ from dojo.utils import (
     add_success_message_to_response,
     async_delete,
     calculate_grade,
+    generate_file_response_from_file_path,
     get_cal_event,
     get_page_items,
     get_return_url,
@@ -171,15 +171,13 @@ def get_filtered_engagements(request, view):
 
     filter_string_matching = get_system_setting("filter_string_matching", False)
     filter_class = EngagementDirectFilterWithoutObjectLookups if filter_string_matching else EngagementDirectFilter
-    engagements = filter_class(request.GET, queryset=engagements)
-
-    return engagements
+    return filter_class(request.GET, queryset=engagements)
 
 
 def get_test_counts(engagements):
     # Get the test counts per engagement. As a separate query, this is much
     # faster than annotating the above `engagements` query.
-    engagement_test_counts = {
+    return {
         test["engagement"]: test["test_count"]
         for test in Test.objects.filter(
             engagement__in=engagements,
@@ -189,7 +187,6 @@ def get_test_counts(engagements):
             test_count=Count("engagement"),
         )
     }
-    return engagement_test_counts
 
 
 def engagements(request, view):
@@ -308,9 +305,8 @@ def edit_engagement(request, eid):
                 if "_Add Tests" in request.POST:
                     return HttpResponseRedirect(
                         reverse("add_tests", args=(engagement.id, )))
-                else:
-                    return HttpResponseRedirect(
-                        reverse("view_engagement", args=(engagement.id, )))
+                return HttpResponseRedirect(
+                    reverse("view_engagement", args=(engagement.id, )))
         else:
             logger.debug(form.errors)
 
@@ -408,12 +404,11 @@ def copy_engagement(request, eid):
                                 recipients=[engagement.lead],
                                 icon="exclamation-triangle")
             return redirect_to_return_url_or_else(request, reverse("view_engagements", args=(product.id, )))
-        else:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Unable to copy engagement, please try again.",
-                extra_tags="alert-danger")
+        messages.add_message(
+            request,
+            messages.ERROR,
+            "Unable to copy engagement, please try again.",
+            extra_tags="alert-danger")
 
     product_tab = Product_Tab(product, title="Copy Engagement", tab="engagements")
     return render(request, "dojo/copy_object.html", {
@@ -431,13 +426,12 @@ class ViewEngagement(View):
         return "dojo/view_eng.html"
 
     def get_risks_accepted(self, eng):
-        risks_accepted = eng.risk_acceptance.all().select_related("owner").annotate(accepted_findings_count=Count("accepted_findings__id"))
-        return risks_accepted
+        return eng.risk_acceptance.all().select_related("owner").annotate(accepted_findings_count=Count("accepted_findings__id"))
 
     def get_filtered_tests(
         self,
         request: HttpRequest,
-        queryset: List[Test],
+        queryset: list[Test],
         engagement: Engagement,
     ):
         filter_string_matching = get_system_setting("filter_string_matching", False)
@@ -677,10 +671,10 @@ def add_tests(request, eid):
             if "_Add Another Test" in request.POST:
                 return HttpResponseRedirect(
                     reverse("add_tests", args=(eng.id, )))
-            elif "_Add Findings" in request.POST:
+            if "_Add Findings" in request.POST:
                 return HttpResponseRedirect(
                     reverse("add_findings", args=(new_test.id, )))
-            elif "_Finished" in request.POST:
+            if "_Finished" in request.POST:
                 return HttpResponseRedirect(
                     reverse("view_engagement", args=(eng.id, )))
     else:
@@ -703,9 +697,7 @@ def add_tests(request, eid):
 
 class ImportScanResultsView(View):
     def get_template(self) -> str:
-        """
-        Returns the template that will be presented to the user
-        """
+        """Returns the template that will be presented to the user"""
         return "dojo/import_scan_results.html"
 
     def get_development_environment(
@@ -722,12 +714,10 @@ class ImportScanResultsView(View):
     def get_engagement_or_product(
         self,
         user: Dojo_User,
-        engagement_id: Optional[int] = None,
-        product_id: Optional[int] = None,
-    ) -> Tuple[Engagement, Product, Product | Engagement]:
-        """
-        Using the path parameters, either fetch the product or engagement
-        """
+        engagement_id: int | None = None,
+        product_id: int | None = None,
+    ) -> tuple[Engagement, Product, Product | Engagement]:
+        """Using the path parameters, either fetch the product or engagement"""
         engagement = product = engagement_or_product = None
         # Get the product if supplied
         # Get the engagement if supplied
@@ -750,13 +740,10 @@ class ImportScanResultsView(View):
         request: HttpRequest,
         **kwargs: dict,
     ) -> ImportScanForm:
-        """
-        Returns the default import form for importing findings
-        """
+        """Returns the default import form for importing findings"""
         if request.method == "POST":
             return ImportScanForm(request.POST, request.FILES, **kwargs)
-        else:
-            return ImportScanForm(**kwargs)
+        return ImportScanForm(**kwargs)
 
     def get_credential_form(
         self,
@@ -770,27 +757,24 @@ class ImportScanResultsView(View):
         """
         if request.method == "POST":
             return CredMappingForm(request.POST)
-        else:
-            # If the engagement is not present, return an empty form
-            if engagement is None:
-                return CredMappingForm()
-            # Otherwise get all creds in the associated engagement
-            return CredMappingForm(
-                initial={
-                    "cred_user_queryset": Cred_Mapping.objects.filter(
-                        engagement=engagement,
-                    ).order_by("cred_id"),
-                },
-            )
+        # If the engagement is not present, return an empty form
+        if engagement is None:
+            return CredMappingForm()
+        # Otherwise get all creds in the associated engagement
+        return CredMappingForm(
+            initial={
+                "cred_user_queryset": Cred_Mapping.objects.filter(
+                    engagement=engagement,
+                ).order_by("cred_id"),
+            },
+        )
 
     def get_jira_form(
         self,
         request: HttpRequest,
         engagement_or_product: Engagement | Product,
-    ) -> Tuple[JIRAImportScanForm | None, bool]:
-        """
-        Returns a JiraImportScanForm if jira is enabled
-        """
+    ) -> tuple[JIRAImportScanForm | None, bool]:
+        """Returns a JiraImportScanForm if jira is enabled"""
         jira_form = None
         push_all_jira_issues = False
         # Determine if jira issues should be pushed automatically
@@ -814,7 +798,7 @@ class ImportScanResultsView(View):
         self,
         product: Product,
         engagement: Engagement,
-    ) -> Tuple[Product_Tab, dict]:
+    ) -> tuple[Product_Tab, dict]:
         """
         Determine how the product tab will be rendered, and what tab will be selected
         as currently active
@@ -831,9 +815,9 @@ class ImportScanResultsView(View):
     def handle_request(
         self,
         request: HttpRequest,
-        engagement_id: Optional[int] = None,
-        product_id: Optional[int] = None,
-    ) -> Tuple[HttpRequest, dict]:
+        engagement_id: int | None = None,
+        product_id: int | None = None,
+    ) -> tuple[HttpRequest, dict]:
         """
         Process the common behaviors between request types, and then return
         the request and context dict back to be rendered
@@ -931,18 +915,14 @@ class ImportScanResultsView(View):
         self,
         context: dict,
     ) -> BaseImporter:
-        """
-        Gets the importer to use
-        """
+        """Gets the importer to use"""
         return DefaultImporter(**context)
 
     def import_findings(
         self,
         context: dict,
     ) -> str | None:
-        """
-        Attempt to import with all the supplied information
-        """
+        """Attempt to import with all the supplied information"""
         try:
             importer_client = self.get_importer(context)
             context["test"], _, finding_count, closed_finding_count, _, _, _ = importer_client.process_scan(
@@ -964,9 +944,7 @@ class ImportScanResultsView(View):
         form: ImportScanForm,
         context: dict,
     ) -> str | None:
-        """
-        Process the form and manipulate the input in any way that is appropriate
-        """
+        """Process the form and manipulate the input in any way that is appropriate"""
         # Update the running context dict with cleaned form input
         context.update({
             "scan": request.FILES.get("file", None),
@@ -1036,9 +1014,7 @@ class ImportScanResultsView(View):
         form: CredMappingForm,
         context: dict,
     ) -> str | None:
-        """
-        Process the credentials form by creating
-        """
+        """Process the credentials form by creating"""
         if cred_user := form.cleaned_data["cred_user"]:
             # Select the credential mapping object from the selected list and only allow if the credential is associated with the product
             cred_user = Cred_Mapping.objects.filter(
@@ -1058,18 +1034,14 @@ class ImportScanResultsView(View):
         self,
         context: dict,
     ) -> HttpResponseRedirect:
-        """
-        Redirect the user to a place that indicates a successful import
-        """
+        """Redirect the user to a place that indicates a successful import"""
         return HttpResponseRedirect(reverse("view_test", args=(context.get("test").id, )))
 
     def failure_redirect(
         self,
         context: dict,
     ) -> HttpResponseRedirect:
-        """
-        Redirect the user to a place that indicates a failed import
-        """
+        """Redirect the user to a place that indicates a failed import"""
         return HttpResponseRedirect(reverse(
             "import_scan_results",
             args=(context.get("engagement", context.get("product")).id, ),
@@ -1078,12 +1050,10 @@ class ImportScanResultsView(View):
     def get(
         self,
         request: HttpRequest,
-        engagement_id: Optional[int] = None,
-        product_id: Optional[int] = None,
+        engagement_id: int | None = None,
+        product_id: int | None = None,
     ) -> HttpResponse:
-        """
-        Process GET requests for the Import View
-        """
+        """Process GET requests for the Import View"""
         # process the request and path parameters
         request, context = self.handle_request(
             request,
@@ -1096,12 +1066,10 @@ class ImportScanResultsView(View):
     def post(
         self,
         request: HttpRequest,
-        engagement_id: Optional[int] = None,
-        product_id: Optional[int] = None,
+        engagement_id: int | None = None,
+        product_id: int | None = None,
     ) -> HttpResponse:
-        """
-        Process POST requests for the Import View
-        """
+        """Process POST requests for the Import View"""
         # process the request and path parameters
         request, context = self.handle_request(
             request,
@@ -1575,8 +1543,7 @@ def view_edit_risk_acceptance(request, eid, raid, edit_mode=False):
         if not errors:
             logger.debug("redirecting to return_url")
             return redirect_to_return_url_or_else(request, reverse("view_risk_acceptance", args=(eid, raid)))
-        else:
-            logger.error("errors found")
+        logger.error("errors found")
 
     else:
         if edit_mode:
@@ -1723,8 +1690,7 @@ def upload_threatmodel(request, eid):
 @user_is_authorized(Engagement, Permissions.Engagement_View, "eid")
 def view_threatmodel(request, eid):
     eng = get_object_or_404(Engagement, pk=eid)
-    response = FileResponse(open(eng.tmodel_path, "rb"))
-    return response
+    return generate_file_response_from_file_path(eng.tmodel_path)
 
 
 @user_is_authorized(Engagement, Permissions.Engagement_View, "eid")
@@ -1763,9 +1729,7 @@ def get_engagements(request):
     if not url:
         msg = "Please use the export button when exporting engagements"
         raise ValidationError(msg)
-    else:
-        if url.startswith("url="):
-            url = url[4:]
+    url = url.removeprefix("url=")
 
     path_items = list(filter(None, re.split(r"/|\?", url)))
 

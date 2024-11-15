@@ -518,9 +518,7 @@ def get_roles_with_permissions():
 
 
 def get_global_roles_with_permissions():
-    """
-    Extra permissions for global roles, on top of the permissions granted to the "normal" roles above.
-    """
+    """Extra permissions for global roles, on top of the permissions granted to the "normal" roles above."""
     return {
         Roles.Maintainer: {Permissions.Product_Type_Add},
         Roles.Owner: {Permissions.Product_Type_Add},

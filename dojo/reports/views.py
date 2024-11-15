@@ -3,7 +3,6 @@ import logging
 import re
 from datetime import datetime
 from tempfile import NamedTemporaryFile
-from typing import List
 
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
@@ -86,16 +85,20 @@ class ReportBuilder(View):
 
     def get_endpoints(self, request: HttpRequest):
         endpoints = Endpoint.objects.filter(finding__active=True,
-                                            finding__verified=True,
                                             finding__false_p=False,
                                             finding__duplicate=False,
                                             finding__out_of_scope=False,
-                                            ).distinct()
+                                            )
+        if get_system_setting("enforce_verified_status", True):
+            endpoints = endpoints.filter(finding__active=True)
+
+        endpoints = endpoints.distinct()
+
         filter_string_matching = get_system_setting("filter_string_matching", False)
         filter_class = EndpointFilterWithoutObjectLookups if filter_string_matching else EndpointFilter
         return filter_class(request.GET, queryset=endpoints, user=request.user)
 
-    def get_available_widgets(self, request: HttpRequest) -> List[Widget]:
+    def get_available_widgets(self, request: HttpRequest) -> list[Widget]:
         return [
             CoverPage(request=request),
             TableOfContents(request=request),
@@ -123,8 +126,7 @@ class CustomReport(View):
         if form.is_valid():
             self._set_state(request)
             return render(request, self.get_template(), self.get_context())
-        else:
-            raise PermissionDenied
+        raise PermissionDenied
 
     def _set_state(self, request: HttpRequest):
         self.request = request
@@ -155,8 +157,7 @@ class CustomReport(View):
     def get_template(self):
         if self.report_format == "HTML":
             return "dojo/custom_html_report.html"
-        else:
-            raise PermissionDenied
+        raise PermissionDenied
 
     def get_context(self):
         return {
@@ -190,12 +191,14 @@ def report_findings(request):
 
 def report_endpoints(request):
     endpoints = Endpoint.objects.filter(finding__active=True,
-                                        finding__verified=True,
                                         finding__false_p=False,
                                         finding__duplicate=False,
                                         finding__out_of_scope=False,
-                                        ).distinct()
+                                        )
+    if get_system_setting("enforce_verified_status", True):
+        endpoints = endpoints.filter(finding__active=True)
 
+    endpoints = endpoints.distinct()
     endpoints = EndpointFilter(request.GET, queryset=endpoints, user=request.user)
 
     paged_endpoints = get_page_items(request, endpoints.qs, 25)
@@ -264,13 +267,15 @@ def endpoint_host_report(request, eid):
 @user_is_authorized(Product, Permissions.Product_View, "pid")
 def product_endpoint_report(request, pid):
     product = get_object_or_404(Product.objects.all().prefetch_related("engagement_set__test_set__test_type", "engagement_set__test_set__environment"), id=pid)
-    endpoint_ids = Endpoint.objects.filter(product=product,
-                                           finding__active=True,
-                                           finding__verified=True,
-                                           finding__false_p=False,
-                                           finding__duplicate=False,
-                                           finding__out_of_scope=False,
-                                           ).values_list("id", flat=True)
+    endpoints = Endpoint.objects.filter(finding__active=True,
+                                         finding__false_p=False,
+                                         finding__duplicate=False,
+                                         finding__out_of_scope=False)
+
+    if get_system_setting("enforce_verified_status", True):
+        endpoint_ids = endpoints.filter(finding__active=True).values_list("id", flat=True)
+
+    endpoint_ids = endpoints.values_list("id", flat=True)
 
     endpoints = prefetch_related_endpoints_for_report(Endpoint.objects.filter(id__in=endpoint_ids))
     endpoints = EndpointReportFilter(request.GET, queryset=endpoints)
@@ -311,8 +316,7 @@ def product_endpoint_report(request, pid):
                            "user": request.user,
                            "title": "Generate Report",
                            })
-        else:
-            raise Http404
+        raise Http404
 
     product_tab = Product_Tab(product, "Product Endpoint Report", tab="endpoints")
     return render(request,
@@ -352,9 +356,8 @@ def generate_report(request, obj, host_view=False):
         if obj is None:
             msg = "No object is given to generate report for"
             raise Exception(msg)
-        else:
-            msg = f"Report cannot be generated for object of type {type(obj).__name__}"
-            raise Exception(msg)
+        msg = f"Report cannot be generated for object of type {type(obj).__name__}"
+        raise Exception(msg)
 
     report_format = request.GET.get("report_type", "HTML")
     include_finding_notes = int(request.GET.get("include_finding_notes", 0))
@@ -585,8 +588,7 @@ def generate_report(request, obj, host_view=False):
                            "context": context,
                            })
 
-        else:
-            raise Http404
+        raise Http404
     paged_findings = get_page_items(request, findings.qs.distinct().order_by("numerical_severity"), 25)
 
     product_tab = None
@@ -655,9 +657,7 @@ def get_findings(request):
     if not url:
         msg = "Please use the report button when viewing findings"
         raise Http404(msg)
-    else:
-        if url.startswith("url="):
-            url = url[4:]
+    url = url.removeprefix("url=")
 
     views = ["all", "open", "inactive", "verified",
              "closed", "accepted", "assessed", "out_of_scope",
@@ -880,8 +880,7 @@ class CSVExportView(View):
                 for endpoint in finding.endpoints.all():
                     num_endpoints += 1
                     endpoint_value += f"{str(endpoint)}; "
-                if endpoint_value.endswith("; "):
-                    endpoint_value = endpoint_value[:-2]
+                endpoint_value = endpoint_value.removesuffix("; ")
                 if len(endpoint_value) > EXCEL_CHAR_LIMIT:
                     endpoint_value = endpoint_value[:EXCEL_CHAR_LIMIT - 3] + "..."
                 fields.append(endpoint_value)
@@ -896,8 +895,7 @@ class CSVExportView(View):
                     vulnerability_ids_value += f"{str(vulnerability_id)}; "
                 if finding.cve and vulnerability_ids_value.find(finding.cve) < 0:
                     vulnerability_ids_value += finding.cve
-                if vulnerability_ids_value.endswith("; "):
-                    vulnerability_ids_value = vulnerability_ids_value[:-2]
+                vulnerability_ids_value = vulnerability_ids_value.removesuffix("; ")
                 fields.append(vulnerability_ids_value)
                 # Tags
                 tags_value = ""
@@ -908,8 +906,7 @@ class CSVExportView(View):
                         tags_value += "..."
                         break
                     tags_value += f"{str(tag)}; "
-                if tags_value.endswith("; "):
-                    tags_value = tags_value[:-2]
+                tags_value = tags_value.removesuffix("; ")
                 fields.append(tags_value)
 
                 self.fields = fields
@@ -962,6 +959,7 @@ class ExcelExportView(View):
                     except Exception as exc:
                         logger.error("Error in attribute: " + str(exc))
                         cell = worksheet.cell(row=row_num, column=col_num, value=key)
+                        col_num += 1
                         continue
                 cell = worksheet.cell(row=row_num, column=col_num, value="found_by")
                 cell.font = font_bold
@@ -1013,6 +1011,7 @@ class ExcelExportView(View):
                     except Exception as exc:
                         logger.error("Error in attribute: " + str(exc))
                         worksheet.cell(row=row_num, column=col_num, value="Value not supported")
+                        col_num += 1
                         continue
                 worksheet.cell(row=row_num, column=col_num, value=finding.test.test_type.name)
                 col_num += 1
@@ -1030,8 +1029,7 @@ class ExcelExportView(View):
                 for endpoint in finding.endpoints.all():
                     num_endpoints += 1
                     endpoint_value += f"{str(endpoint)}; \n"
-                if endpoint_value.endswith("; \n"):
-                    endpoint_value = endpoint_value[:-3]
+                endpoint_value = endpoint_value.removesuffix("; \n")
                 if len(endpoint_value) > EXCEL_CHAR_LIMIT:
                     endpoint_value = endpoint_value[:EXCEL_CHAR_LIMIT - 3] + "..."
                 worksheet.cell(row=row_num, column=col_num, value=endpoint_value)
@@ -1047,16 +1045,14 @@ class ExcelExportView(View):
                     vulnerability_ids_value += f"{str(vulnerability_id)}; \n"
                 if finding.cve and vulnerability_ids_value.find(finding.cve) < 0:
                     vulnerability_ids_value += finding.cve
-                if vulnerability_ids_value.endswith("; \n"):
-                    vulnerability_ids_value = vulnerability_ids_value[:-3]
+                vulnerability_ids_value = vulnerability_ids_value.removesuffix("; \n")
                 worksheet.cell(row=row_num, column=col_num, value=vulnerability_ids_value)
                 col_num += 1
                 # tags
                 tags_value = ""
                 for tag in finding.tags.all():
                     tags_value += f"{str(tag)}; \n"
-                if tags_value.endswith("; \n"):
-                    tags_value = tags_value[:-3]
+                tags_value = tags_value.removesuffix("; \n")
                 worksheet.cell(row=row_num, column=col_num, value=tags_value)
                 col_num += 1
                 self.col_num = col_num

@@ -24,7 +24,7 @@ class TagTests(DojoAPITestCase):
 
         del finding_details["id"]
 
-        finding_details["title"] = "tags test " + str(random.randint(1, 9999))
+        finding_details["title"] = "tags test " + str(random.randint(1, 9999))  # noqa: S311
         finding_details["tags"] = tags
         response = self.post_new_finding_api(finding_details)
 
@@ -363,7 +363,7 @@ class InheritedTagsTests(DojoAPITestCase):
         self.assertEqual(product_tags_post_removal, self._convert_instance_tags_to_list(objects.get("test")))
         self.assertEqual(product_tags_post_removal, self._convert_instance_tags_to_list(objects.get("finding")))
         # Add a tag from the product
-        self.product.tags.add("more", "tags" "!")
+        self.product.tags.add("more", "tags!")
         # This triggers an async function with celery that will fail, so run it manually here
         propagate_tags_on_product_sync(self.product)
         # Save the tags post removal
