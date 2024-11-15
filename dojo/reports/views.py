@@ -12,7 +12,8 @@ from django.http import Http404, HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views import View
-from openpyxl import Workbook
+from django.contrib.staticfiles import finders
+from openpyxl import Workbook,load_workbook
 from openpyxl.styles import Font
 
 from dojo.authorization.authorization import user_has_permission_or_403
@@ -28,7 +29,7 @@ from dojo.filters import (
 from dojo.finding.queries import get_authorized_findings
 from dojo.finding.views import BaseListFindings
 from dojo.forms import ReportOptionsForm
-from dojo.models import Dojo_User, Endpoint, Engagement, Finding, Product, Product_Type, Test
+from dojo.models import Dojo_User, Endpoint, Engagement, Finding, Product, Product_Type, Test,Risk_Assessment
 from dojo.reports.widgets import (
     CoverPage,
     CustomReportJsonForm,
@@ -659,7 +660,7 @@ def get_findings(request):
             url = url[4:]
 
     views = ["all", "open", "inactive", "verified",
-             "closed", "accepted", "out_of_scope",
+             "closed", "accepted", "assessed", "out_of_scope",
              "false_positive", "inactive"]
     # request.path = url
     obj_name = obj_id = view = query = None
@@ -705,6 +706,8 @@ def get_findings(request):
             filter_name = "Closed"
         elif view == "accepted":
             filter_name = "Accepted"
+        elif view == "assessed":
+            filter_name = "Assessed"
         elif view == "out_of_scope":
             filter_name = "Out of Scope"
         elif view == "false_positive":
@@ -1072,4 +1075,198 @@ class ExcelExportView(View):
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
         response["Content-Disposition"] = "attachment; filename=findings.xlsx"
+        return response
+
+
+class PSRAExcelExportView(View):
+    factor_columns = {
+        "EE": "E",  # Ease of Exploit
+        "ED": "F",  # Ease of Discovery
+        "AW": "G",  # Awareness
+        "DT": "H",  # Detectability
+        "SR": "S",  # Security Researcher
+        "AT": "T",  # Advanced Network Threat
+        "OS": "U",  # Outsider
+        "HD": "V",  # Hardware Defects
+        "SF": "W",  # Software Defects
+        "IN": "X",  # Intruder
+        "MC": "Y",  # Malicious Code
+        "IO": "Z",  # Infrastructure Outage
+        "IS": "AA",  # Insider
+        "TI": "AB",  # Trusted Insider
+        "CU": "AC",  # Clinical Users
+        "SA": "AD",  # System Admins
+        "ND": "AE",  # Natural or Man-Made Disaster
+        "EN": "AF",  # Engineer
+        "AA": "AG",  # Automated or Remote Access
+        "SD": "AI",  # Sensitive Data
+        "PD": "AJ",  # Personal Data
+        "HN": "AK",  # Hospital Network
+        "ATD": "AL",  # Audit Trail Data
+        "CF": "AM",  # Configuration
+        "SS": "AN",  # System Software
+        "HW": "AO",  # Hardware
+        "RE": "AP",  # Removable Media with ePHI
+        "RM": "AQ",  # Removable Media
+        "LD": "AR",  # Logging Data
+        "PDN": "AS",  # Product Documentation
+        "PS": "AT",  # Personal
+        "PR": "AU",  # Product
+        "NW": "AV",  # Network
+        "AD": "AW",  # All Data
+        "CI": "AX",  # Confidentiality
+        "IT": "AY",  # Integrity
+        "AV": "AZ",  # Availability
+        "DL": "BK",  # Delta Likelihood
+        "DV": "BL",  # Delta Vulnerability
+        "DC": "BN",  # Delta Confidentiality
+        "DI": "BO",  # Delta Integrity
+        "DA": "BP",  # Delta Availability
+        "BL": "CA",  # Business Likelihood
+        "FD": "BU",  # Financial Damage
+        "RD": "BV",  # Reputation Damage
+        "RN": "BW",  # Regulatory Non-Compliance
+        "CN": "BX",  # Customer Non-Compliance
+        "PV": "BY",  # Privacy Violation
+    }
+
+    def initialize_factors_with_dash(self, worksheet, row):
+        """Initialize cells corresponding to factors in factors_to_mark_with_x with '-'."""
+        for factor in self.factors_to_mark_with_x:
+            column_letter = self.factor_columns.get(factor)
+            if column_letter:
+                cell_ref = f"{column_letter}{row}"
+                worksheet[cell_ref].value = '-'
+
+    
+    def add_findings_data(self):
+        return self.findings
+    
+    # List of factors that should be marked with 'x' if present
+    factors_to_mark_with_x = {
+        "SR", "AT", "OS", "HD", "SF", "IN", "MC", "IO", "IS", "TI", "CU", "SA", 
+        "ND", "EN", "AA", "SD", "PD", "HN", "ATD", "CF", "SS", "HW", "RE", "RM", 
+        "LD", "PDN", "PS", "PR", "NW", "AD"
+    }
+
+    def parse_vector_string(self, vector_string):
+        """Parse a vector string into a dictionary of factor-value pairs, ignoring case for factor codes."""
+        vector_string = vector_string.replace("PSRA:1.0 ", "", 1).strip()
+        factor_values = {}
+        
+        for pair in vector_string.split("/"):
+            if ':' in pair:
+                factor, value = map(str.strip, pair.split(':', 1))
+                factor_values[factor.upper()] = value.strip()
+        
+        return factor_values
+
+    def fill_finding_row(self, worksheet, factor_values, row):
+        for factor_code, value in factor_values.items():
+            column_letter = self.factor_columns.get(factor_code.upper())
+            if column_letter:
+                cell_ref = f"{column_letter}{row}"
+                
+                # If factor code is in `factors_as_x`, set value as 'x'
+                if factor_code.upper() in self.factors_to_mark_with_x:
+                    worksheet[cell_ref].value = 'X'
+                else:
+                    # Strip special characters and whitespace from the value
+                    clean_value = value.strip().strip("'")  # Removes whitespace and single quotes
+                    
+                    # Convert to integer if it's a numeric string; otherwise, keep it as a string
+                    try:
+                        worksheet[cell_ref].value = int(clean_value) if clean_value.isdigit() else clean_value
+                    except ValueError:
+                        worksheet[cell_ref].value = clean_value  # Assign directly if non-numeric
+    
+    def set_threat_type(self,rmm_worksheet, idx, threat_types):
+        # Mapping individual threat types to their respective column indexes
+        threat_mapping = {
+            'S': 'M',  # Spoofing
+            'T': 'N',  # Tampering
+            'R': 'O',  # Repudiation
+            'I': 'P',  # Information Disclosure
+            'D': 'Q',  # Denial of Service
+            'E': 'R'   # Elevation of Privilege
+        }
+
+        # First, set all cells in M to R to '-'
+        for col in threat_mapping.values():
+            rmm_worksheet[f"{col}{idx}"] = '-'
+        
+        # Split the comma-separated threat types and set the respective cells to 'X'
+        for threat in threat_types:
+            threat = threat.strip()  # Ensure there are no spaces
+            if threat in threat_mapping:
+                rmm_worksheet[f"{threat_mapping[threat]}{idx}"] = 'X'
+
+
+    def get(self, request):
+        template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
+        workbook = load_workbook(template_path,data_only=False)
+        
+        rmm_worksheet = workbook["RMM"]
+        mitigation_worksheet = workbook["Mitigations"]
+
+        findings, _obj = get_findings(request)
+        self.findings = findings
+        findings = self.add_findings_data()
+
+        start_row = 4  # Starting row for data in Excel
+        for idx, finding in enumerate(findings, start=start_row):
+            risk_assessment = Risk_Assessment.objects.filter(assessed_findings=finding).first()
+            
+            if risk_assessment is None: 
+                continue
+            
+            vector_string = risk_assessment.vector_string
+            if not vector_string:
+                continue
+            
+            vulnerability_description = finding.title
+            threat_description = risk_assessment.threat_description
+            risk_statement = risk_assessment.risk_statement
+            hazard_statement = risk_assessment.related_hazard_item
+            vulnerability_cause = risk_assessment.vulnerability_cause
+            threat_types = risk_assessment.threat_types
+            rationale_and_actions= risk_assessment.rational_and_actions
+            accepted_risk = finding.risk_accepted
+            mitigation_type  = risk_assessment.mitigation_types
+            mitigation_reference = risk_assessment.mitigation_reference
+            
+            self.set_threat_type(rmm_worksheet, idx, threat_types)
+
+            # Initialize cells with '-' for factors in factors_to_mark_with_x
+            self.initialize_factors_with_dash(rmm_worksheet, idx)
+
+            factor_values = self.parse_vector_string(vector_string)
+            self.fill_finding_row(rmm_worksheet, factor_values, idx)
+
+            # Set the additional values in specified columns
+            rmm_worksheet[f"B{idx}"] = "V"+str(finding.id)
+            rmm_worksheet[f"C{idx}"] = vulnerability_description  # Vulnerability Description in column "C"
+            rmm_worksheet[f"K{idx}"] = threat_description         # Threat Description in column "K"
+            rmm_worksheet[f"L{idx}"] = risk_statement             # Risk Statement in column "L"
+            rmm_worksheet[f"CF{idx}"] = hazard_statement
+            rmm_worksheet[f"D{idx}"] = vulnerability_cause
+            rmm_worksheet[f"CE{idx}"] = rationale_and_actions
+
+            if accepted_risk:
+                rmm_worksheet[f"CD{idx}"] = "Yes"
+            else:
+                rmm_worksheet[f"CD{idx}"] = "No"
+
+            mitigation_worksheet[f"A{idx-2}"] = "M"+str(finding.id)  # Mitigations start from row 2
+            mitigation_worksheet[f"B{idx-2}"] = finding.mitigation  # Mitigation in column "B"
+            mitigation_worksheet[f"C{idx-2}"] = mitigation_type  # Mitigation Type in column "C"
+            mitigation_worksheet[f"D{idx-2}"] = mitigation_reference  # Mitigation Reference in column "D"
+
+            rmm_worksheet[f"BI{idx}"] = "M"+str(finding.id) # set Mitigation ID in column "BI"
+
+        
+        response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response["Content-Disposition"] = 'attachment; filename="RiskAssessment.xlsx"'
+        workbook.save(response)
+        
         return response

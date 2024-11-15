@@ -732,6 +732,12 @@
                                                     </a>
                                                 </li>
                                                 <li>
+                                                    <a href="{% url 'product_assessed_findings' product_tab.product.id %}">
+                                                        <i class="fa-solid fa-eye"></i>
+                                                        {% trans "View Risk Assessed Findings" %}
+                                                    </a>
+                                                </li>
+                                                <li>
                                                     <a href="{% url 'product_all_findings' product_tab.product.id %}">
                                                         <i class="fa-solid fa-magnifying-glass"></i>
                                                         {% trans "View All Findings" %}
@@ -1068,6 +1074,11 @@
         <script src="{% static "dojo/js/cvsscalc31_helptext.js" %}"></script>
         <script src="{% static "dojo/js/cvsscalc31.js" %}"></script>
         <script src="{% static "dojo/js/cvss_calculator.js" %}"></script>
+        <script src="{% static "dojo/js/owasp_rrm.js" %}"></script>
+        <script src="{% static "dojo/js/vulnerability_evalution.js" %}"></script>
+       
+        
+        
         <script type="application/javascript">
             $(document).ready(function() {
                 $('.has-popover').hover(

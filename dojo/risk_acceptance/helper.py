@@ -10,6 +10,7 @@ import dojo.jira_link.helper as jira_helper
 from dojo.celery import app
 from dojo.jira_link.helper import escape_for_jira
 from dojo.models import Dojo_User, Finding, Notes, Risk_Acceptance, System_Settings
+
 from dojo.notifications.helper import create_notification
 from dojo.utils import get_full_url, get_system_setting
 
@@ -81,7 +82,6 @@ def reinstate(risk_acceptance, old_expiration_date):
     risk_acceptance.expiration_date_handled = None
     risk_acceptance.expiration_date_warned = None
     risk_acceptance.save()
-
 
 def delete(eng, risk_acceptance):
     findings = risk_acceptance.accepted_findings.all()

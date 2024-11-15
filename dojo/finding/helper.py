@@ -35,10 +35,14 @@ OUT_OF_SCOPE_FINDINGS_QUERY = Q(active=False, out_of_scope=True)
 FALSE_POSITIVE_FINDINGS_QUERY = Q(active=False, duplicate=False, false_p=True)
 INACTIVE_FINDINGS_QUERY = Q(active=False, duplicate=False, is_mitigated=False, false_p=False, out_of_scope=False)
 ACCEPTED_FINDINGS_QUERY = Q(risk_accepted=True)
+ASSESSED_FINDINGS_QUERY = Q(risk_assessed=True)
 NOT_ACCEPTED_FINDINGS_QUERY = Q(risk_accepted=False)
 WAS_ACCEPTED_FINDINGS_QUERY = Q(risk_acceptance__isnull=False) & Q(risk_acceptance__expiration_date_handled__isnull=False)
 CLOSED_FINDINGS_QUERY = Q(is_mitigated=True)
 UNDER_REVIEW_QUERY = Q(under_review=True)
+
+
+NOT_ASSESSED_FINDING_QUERY = Q(risk_assessed=False)
 
 
 # this signal is triggered just before a finding is getting saved
@@ -76,6 +80,7 @@ pre_save_changed.connect(
         "mitigated_by",
         "out_of_scope",
         "risk_accepted",
+        "risk_assessed",
     ],
 )
 

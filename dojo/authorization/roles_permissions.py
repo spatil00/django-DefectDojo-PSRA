@@ -49,6 +49,7 @@ class Permissions(IntEnum):
     Engagement_Edit = 1206
     Engagement_Delete = 1207
     Risk_Acceptance = 1208
+    Risk_Assessment = 1209
 
     Test_View = 1302
     Test_Add = 1303

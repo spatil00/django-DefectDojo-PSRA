@@ -1093,6 +1093,7 @@ class Product(models.Model):
         help_text=_("Enables product tag inheritance. Any tags added on a product will automatically be added to all Engagements, Tests, and Findings"))
     enable_simple_risk_acceptance = models.BooleanField(default=False, help_text=_("Allows simple risk acceptance by checking/unchecking a checkbox."))
     enable_full_risk_acceptance = models.BooleanField(default=True, help_text=_("Allows full risk acceptance using a risk acceptance form, expiration date, uploaded proof, etc."))
+    enable_risk_assessment = models.BooleanField(default=True, help_text=_("Allows risk asessment using OWASP Risk Assessment methodology"))
 
     disable_sla_breach_notifications = models.BooleanField(
         default=False,
@@ -1452,6 +1453,10 @@ class Engagement(models.Model):
                                              default=None,
                                              editable=False,
                                              blank=True)
+    risk_assessment = models.ManyToManyField("Risk_Assessment",
+                                             default=None,
+                                             editable=False,
+                                             blank=True),
     done_testing = models.BooleanField(default=False, editable=False)
     engagement_type = models.CharField(editable=True, max_length=30, default="Interactive",
                                        null=True,
@@ -2363,6 +2368,9 @@ class Finding(models.Model):
     risk_accepted = models.BooleanField(default=False,
                                        verbose_name=_("Risk Accepted"),
                                        help_text=_("Denotes if this finding has been marked as an accepted risk."))
+    risk_assessed = models.BooleanField(default=False,
+                                       verbose_name=_("Risk Assessed"),
+                                       help_text=_("Denotes if this finding has been assessed as per OWASP Risk Assessment."))
     under_review = models.BooleanField(default=False,
                                        verbose_name=_("Under Review"),
                                        help_text=_("Denotes is this flaw is currently being reviewed."))
@@ -2673,7 +2681,9 @@ class Finding(models.Model):
         self.set_sla_expiration_date()
 
         logger.debug("Saving finding of id " + str(self.id) + " dedupe_option:" + str(dedupe_option) + " (self.pk is %s)", "None" if self.pk is None else "not None")
+        logger.debug(f"Before super().save(): mitigation={self.mitigation}")
         super().save(*args, **kwargs)
+        logger.debug(f"After super().save(): mitigation={self.mitigation}")
 
         self.found_by.add(self.test.test_type)
 
@@ -2947,6 +2957,8 @@ class Finding(models.Model):
             status += ["Duplicate"]
         if self.risk_accepted:
             status += ["Risk Accepted"]
+        if self.risk_assessed:
+            status +=["Risk Assessed"]
         if not len(status):
             status += ["Initial"]
 
@@ -3619,6 +3631,59 @@ class BurpRawRequestResponse(models.Model):
         res = re.sub(r"\n\s*\n", "\n", res)
         return res
 
+class Risk_Assessment(models.Model):
+    THREAT_TYPE_CHOICES = [
+        ("S", "Spoofing"),
+        ("T", "Tampering"),
+        ("R", "Repudiation"),
+        ("I", "Information Disclosure"),
+        ("D", "Denial of Service"),
+        ("E", "Elevation of Privilege"),
+    ]
+
+    MITIGATION_TYPE_CHOICES = [
+        ("D", "D - By Design"),
+        ("P", "P - By Protective Measures"),
+        ("M", "M - By Process Control"),
+        ("I", "I - By Information for Safety"),
+        ("N", "N - No Mitigation (Risk Accepted)"),
+    ]
+
+    threat_types = MultiSelectField(choices=THREAT_TYPE_CHOICES, max_length=20)
+    mitigation_types = models.CharField(choices=MITIGATION_TYPE_CHOICES, max_length=1, default="D")
+    name = models.CharField(max_length=300, null=False, blank=False)
+    assessed_findings = models.ManyToManyField("dojo.Finding", related_name="risk_assessments")
+    vector_string = models.CharField(max_length=255, blank=True, null=True)
+    vulnerability_cause = models.TextField(blank=True, null=True)
+    threat_description = models.TextField(blank=True, null=True)
+    risk_statement = models.TextField(blank=True, null=True)
+    related_hazard_item = models.TextField(blank=True, null=True)
+    rational_and_actions = models.TextField(blank=True, null=True)
+    mitigation_reference = models.CharField(max_length=4000, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Risk Assessment"
+        verbose_name_plural = "Risk Assessments"
+
+    def __str__(self):
+        return self.name
+    
+    @property
+    def finding_mitigation(self):
+        return self._finding_mitigation if hasattr(self, '_finding_mitigation') else None
+
+    @finding_mitigation.setter
+    def finding_mitigation(self, value):
+        self._finding_mitigation = value
+
+    @property
+    def accept_risk(self):
+        return self._accept_risk if hasattr(self, '_accept_risk') else None
+
+    @accept_risk.setter
+    def accept_risk(self, value):
+        self._accept_risk = value
+    
 
 class Risk_Acceptance(models.Model):
     TREATMENT_ACCEPT = "A"
@@ -4622,6 +4687,7 @@ admin.site.register(FileAccessToken)
 admin.site.register(Stub_Finding)
 admin.site.register(Engagement)
 admin.site.register(Risk_Acceptance)
+admin.site.register(Risk_Assessment)
 admin.site.register(Check_List)
 admin.site.register(Test_Type)
 admin.site.register(Endpoint_Params)

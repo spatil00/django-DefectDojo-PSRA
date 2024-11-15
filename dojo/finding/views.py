@@ -32,6 +32,7 @@ from imagekit.processors import ResizeToFill
 import dojo.finding.helper as finding_helper
 import dojo.jira_link.helper as jira_helper
 import dojo.risk_acceptance.helper as ra_helper
+import dojo.risk_assessment.helper as risk_helper
 from dojo.authorization.authorization import user_has_permission_or_403
 from dojo.authorization.authorization_decorators import (
     user_has_global_permission,
@@ -332,6 +333,8 @@ class BaseListFindings:
             return findings.filter(finding_helper.INACTIVE_FINDINGS_QUERY)
         elif filter_name == "Accepted":
             return findings.filter(finding_helper.ACCEPTED_FINDINGS_QUERY)
+        elif filter_name == "Assessed":
+            return findings.filter(finding_helper.ASSESSED_FINDINGS_QUERY)
         elif filter_name == "Closed":
             return findings.filter(finding_helper.CLOSED_FINDINGS_QUERY)
         else:
@@ -484,6 +487,10 @@ class ListAcceptedFindings(ListFindings):
         self.filter_name = "Accepted"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
+class ListAssessedFindings(ListFindings):
+    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+        self.filter_name = "Assessed"
+        return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
 class ListClosedFindings(ListFindings):
     def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):

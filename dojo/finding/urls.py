@@ -91,6 +91,11 @@ urlpatterns = [
         name="product_accepted_findings",
     ),
     re_path(
+        r"^product/(?P<product_id>\d+)/finding/assessed$",
+        views.ListAssessedFindings.as_view(),
+        name="product_assessed_findings",
+    ),
+    re_path(
         r"^engagement/(?P<engagement_id>\d+)/finding/open$",
         views.ListOpenFindings.as_view(),
         name="engagement_open_findings",

@@ -1,0 +1,478 @@
+ #initial_risk_calculator {
+  height: 80vh;
+  width: 70%;
+  background-color: #ffffff;
+  border: 1px solid #d0d0d0;
+  overflow-y: scroll;
+  z-index: 42;
+  padding: 10px;
+}
+
+
+#vulnerability_evalutor {
+  height: 50vh;
+  width: 70%;
+  background-color: #ffffff;
+  border: 1px solid #d0d0d0;
+  overflow-y: scroll;
+  z-index: 42;
+  padding: 10px;
+}
+
+#residual_risk_calculator{
+  height: 50vh;
+  width: 70%;
+  background-color: #ffffff;
+  border: 1px solid #d0d0d0;
+  overflow-y: scroll;
+  z-index: 42;
+  padding: 10px;
+}
+
+#business_risk_calculator{
+  height: 50vh;
+  width: 70%;
+  background-color: #ffffff;
+  border: 1px solid #d0d0d0;
+  overflow-y: scroll;
+  z-index: 42;
+  padding: 10px;
+}
+
+
+#cvssReference {
+  font-size: 100%;
+}
+
+/*  Blue strip at the top of the page */
+fieldset {
+  position: relative;
+  background-color: #f2f2f2;
+  margin-top: 50px;
+  border: 0;
+  padding: 1em 0;
+}
+
+fieldset legend {
+  background-color: rgba(32, 166, 216, 0.75);
+  color: #ffffff;
+  margin: 0;
+  width: 100%;
+  padding: 0.5em 0;
+  text-indent: 1em;
+}
+
+fieldset div.metric {
+  padding: 0;
+  margin: 0.5em 0;
+}
+
+
+.risk_score span {
+  font-size: 150%;
+  font-weight: bold;
+  width: 100%;
+}
+
+
+@media only screen and (min-width: 768px) {
+  fieldset div.column {
+      width: 45%;
+      margin: 0 0 0 1em;
+  }
+
+  fieldset div.column-left {
+      float: left;
+      height: auto;
+  }
+
+  fieldset div.column-right {
+      float: right;
+      height: auto;
+  }
+
+  fieldset h3 {
+      font-size: 1em;
+      margin: 0;
+      padding-left: 0.1em;
+  }
+
+}
+
+/* Style for labels */
+.btn-scale {
+  min-width: 44px;
+  width: 6%;
+  text-align: center;
+  font-weight: bold;
+  color: black;
+  font-family: 'Lato', sans-serif;
+  display: inline-block;
+  padding: 5px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.btn-scale-asc-1, .btn-scale-desc-10 {
+  background-color: #33FF00;
+}
+
+.btn-scale-asc-1:hover, .btn-scale-desc-10:hover {
+  background-color: #2CDE00;
+}
+
+.btn-scale-asc-2, .btn-scale-desc-9 {
+  background-color: #66FF00;
+}
+
+.btn-scale-asc-2:hover, .btn-scale-desc-9:hover {
+  background-color: #59DE00;
+}
+
+.btn-scale-asc-3, .btn-scale-desc-8 {
+  background-color: #99FF00;
+}
+
+.btn-scale-asc-3:hover, .btn-scale-desc-8:hover {
+  background-color: #85DE00;
+}
+
+.btn-scale-asc-4, .btn-scale-desc-7 {
+  background-color: #CCFF00;
+}
+
+.btn-scale-asc-4:hover, .btn-scale-desc-7:hover {
+  background-color: #B1DE00;
+}
+
+.btn-scale-asc-5, .btn-scale-desc-6 {
+  background-color: #FFFF00;
+}
+
+.btn-scale-asc-5:hover, .btn-scale-desc-6:hover {
+  background-color: #DEDE00;
+}
+
+.btn-scale-asc-6, .btn-scale-desc-5 {
+  background-color: #FFCC00;
+}
+
+.btn-scale-asc-6:hover, .btn-scale-desc-5:hover {
+  background-color: #DEB100;
+}
+
+.btn-scale-asc-7, .btn-scale-desc-4 {
+  background-color: #FF9900;
+}
+
+.btn-scale-asc-7:hover, .btn-scale-desc-4:hover {
+  background-color: #DE8500;
+}
+
+.btn-scale-asc-8, .btn-scale-desc-3 {
+  background-color: #FF6600;
+}
+
+.btn-scale-asc-8:hover, .btn-scale-desc-3:hover {
+  background-color: #DE5900;
+}
+
+.btn-scale-asc-9, .btn-scale-desc-2 {
+  background-color: #FF3300;
+}
+
+.btn-scale-asc-9:hover, .btn-scale-desc-2:hover {
+  background-color: #DE2C00;
+}
+
+.btn-scale-asc-10, .btn-scale-desc-1 {
+  background-color: #FF0000;
+}
+
+.btn-scale-asc-10:hover, .btn-scale-desc-1:hover {
+  background-color: #DE0000;
+}
+
+.btn-scale.active {
+  border: 3px solid #000; /* You can choose how to visually indicate the selection */
+  transform: scale(1.10); /* Adds a slight scaling effect to show it's active */
+}
+
+
+#vector {
+  margin: 0 1em;
+  padding: 0;
+}
+
+#RiskString {
+  display: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background-color: transparent;
+  color: #ffffff;
+  font-weight: bold;
+  font-size: 0.8em;
+  width: 80em;
+  max-width: 100%;
+}
+
+.risk_score {
+  position: absolute;
+  top: -36px;
+  right: 0;
+  padding: 0 0.4em;
+  margin: 0 15px;
+  border: 2px solid #666666;
+  background: #dddddd;
+  font-size: 11px;
+  border-radius: 10px;
+  width: 100px;
+  height: auto;
+  line-height: 150%;
+  text-align: center;
+}
+
+
+
+.none,
+.low,
+.medium,
+.high,
+.critical {
+  color: #ffffff;
+}
+
+.verylow {
+  background: #53aa33;
+  border: 2px solid #53aa33;
+}
+
+.low {
+  background: #ffcb0d;
+  border: 2px solid #ffcb0d;
+}
+
+.medium {
+  background: #f9a009;
+  border: 2px solid #f9a009;
+}
+
+.high {
+  background: #df3d03;
+  border: 2px solid #df3d03;
+}
+
+.veryhigh {
+  background: #cc0500;
+  border: 2px solid #cc0500;
+}
+
+
+/* Specific score types - no styling, just identifiers */
+.vulnerability_score {
+/* No specific styles here, just used for applying scope */
+}
+
+.initial_risk_score {
+/* No specific styles here, just used for applying scope */
+}
+
+.residual_risk_score {
+/* No specific styles here, just used for applying scope */
+}
+
+
+.business_risk_score {
+  /* No specific styles here, just used for applying scope */
+  }
+
+
+.needBaseMetrics {
+  text-align: center;
+  line-height: 100%;
+  padding-top: 5px;
+  font-size: 15px;
+}
+
+.ScoreValue {
+  display: block;
+  font-size: 32px;
+  line-height: 32px;
+  font-weight: normal;
+  margin-top: 4px;
+}
+
+.ScoreSeverity {
+  font-size: 16px;
+  font-weight: normal;
+  margin-bottom: 5px;
+  display: block;
+}
+
+div#scriptWarning {
+  border: solid red 2px;
+  background: #f5dddd;
+  padding: 1em 1em 1em 1em;
+  margin: 0.4em 0;
+}
+
+
+/* Hide the default checkbox */
+.metric_agent input[type="checkbox"],
+.metric_asset input[type="checkbox"] {
+    display: none; /* Hides the checkbox */
+}
+
+.metric_agent, .metric_asset {
+  text-align: left; /* Center-aligns the inline blocks */
+   padding: 10px 10px 10px 30px;
+}
+
+/* Style the label to resemble DefectDojo's modern buttons */
+.metric_agent label, .metric_asset label {
+    display: inline-block;
+    padding: 7px 12px;
+    margin: 3px;
+    font-size: 14px;
+    font-weight: 500;
+    background-color: #f9f9f9;
+    border-radius: 20px;
+    border: 1px solid #ddd;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    min-width: 50px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    letter-spacing: 0.5px;
+    font-family: 'Arial', sans-serif;
+}
+
+/* Align the icons with the text */
+.metric_agent label i, .metric_asset label i {
+    margin-right: 8px; /* Space between icon and text */
+    font-size: 16px; /* Icon size */
+    color: #007bff; /* Default icon color */
+    vertical-align: middle;
+}
+
+/* Hover effect for the button */
+.metric_agent label:hover, .metric_asset label:hover {
+    background-color: #f0f0f0;
+    border-color: #ccc;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* Style the label when checked/active using DefectDojo's blue theme */
+.metric_agent input[type="checkbox"]:checked + label,
+.metric_asset input[type="checkbox"]:checked + label {
+    background-color: #007bff; /* DefectDojo blue */
+    color: white;
+    border-color: #007bff;
+    box-shadow: 0 6px 12px rgba(0, 123, 255, 0.3); /* Adds depth when selected */
+    transform: translateY(-2px); /* Slight lift when selected */
+}
+
+/* Change the icon color when the checkbox is checked */
+.metric_agent input[type="checkbox"]:checked + label i,
+.metric_asset input[type="checkbox"]:checked + label i {
+    color: white; /* Change icon color to white when checked */
+}
+
+/* When hovering over a selected/checked button */
+.metric_agent input[type="checkbox"]:checked + label:hover,
+.metric_asset input[type="checkbox"]:checked + label:hover {
+    background-color: #0056b3; /* Darker blue for hover */
+    border-color: #0056b3;
+}
+/* Optional: Spacing between buttons */
+.metric_agent, .metric_asset, .metric {
+  margin-bottom: 10px;
+}
+
+/* Add a little padding to the button container for better alignment */
+div.metric_agent, div.metric_asset {
+  padding: 10px;
+}
+
+/* high , low, medium, veryhigh, verylow, buttons for businesslikelihood */
+
+/* Reuse existing classes for severity colors */
+
+
+
+textarea {
+  width: 70%; /* Ensure the textareas take up the full width of the column */
+  max-width: 70%; /* Prevent overflow */
+  height: 85px;
+}
+
+/* Responsive styles for smaller screens */
+@media only screen and (max-width: 768px) {
+  label {
+      min-width: 100px; /* Smaller width for mobile */
+      padding: 8px 12px; /* Adjusted padding for mobile */
+  }
+}
+
+
+/* General button styling for BusinessLikelihood */
+.btn-business-likelihood {
+  min-width: 80px; /* Wider width for readability */
+  margin: 10px 5px; /* Spacing between buttons */
+  padding: 5px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffffff;
+  font-family: 'Lato', sans-serif;
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Color scheme for each level */
+.btn-business-likelihood-verylow {
+  background-color: #53aa33; /* Very Low: Green */
+}
+
+.btn-business-likelihood-low {
+  background-color: #ffcb0d; /* Low: Yellow */
+}
+
+.btn-business-likelihood-medium {
+  background-color: #f9a009; /* Medium: Orange */
+}
+
+.btn-business-likelihood-high {
+  background-color: #df3d03; /* High: Red */
+}
+
+.btn-business-likelihood-veryhigh {
+  background-color: #cc0500; /* Very High: Dark Red */
+}
+
+/* Hover effect */
+.btn-business-likelihood:hover {
+  opacity: 0.85;
+}
+
+
+
+/* Active state styling for btn-business-likelihood */
+.btn-business-likelihood.active {
+  border: 3px solid #000; /* Matches .btn-scale active style */
+  transform: scale(1.10); /* Slight scaling to indicate active state */
+}
+
+#initial_risk_calculator,
+#residual_risk_calculator,
+#business_risk_calculator,
+#vulnerability_evalutor {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.small-help-icon {
+  font-size: 0.75em; /* Adjust the size as needed */
+}

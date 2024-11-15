@@ -1,0 +1,242 @@
+
+<fieldset  id="initial_risk_calculator">
+    <fieldset id="InitialRiskGroup">
+        <legend id="InitialRiskGroup_Legend"> Initial Risk</legend>
+        <div class="column column-left">
+            <div class="metric_agent">
+                <h4 id="ThreatAgent_Heading">Threat Agents
+                        <i class="fa-solid fa-circle-question has-popover small-help-icon" data-trigger="hover" data-html="true" data-content="Select the relevent threat agents" data-placement="right" data-container="body">
+                    </i>
+                </h4>
+                
+                <input name="securityresearcher" value="SR" id="id_securityresearcher" type="checkbox">
+                <label for="id_securityresearcher" id="securityresearcher_label">
+                    <i class="fas fa-user-secret"></i> Security Researcher
+                </label>
+            
+                <input name="advanced_network_threat" value="ANT" id="id_advanced_network_threat" type="checkbox">
+                <label for="id_advanced_network_threat" id="advanced_network_threat_label">
+                    <i class="fas fa-network-wired"></i> Advanced Network Threat
+                </label>
+            
+                <input name="outsider" value="OS" id="id_outsider" type="checkbox">
+                <label for="id_outsider" id="outsider_label">
+                    <i class="fas fa-user-alt-slash"></i> Outsider
+                </label>
+            
+                <input name="hardware_defects" value="HD" id="id_hardware_defects" type="checkbox">
+                <label for="id_hardware_defects" id="hardware_defects_label">
+                    <i class="fas fa-tools"></i> Hardware Defects
+                </label>
+            
+                <input name="software_defects" value="SD" id="id_software_defects" type="checkbox">
+                <label for="id_software_defects" id="software_defects_label">
+                    <i class="fas fa-code"></i> Software Defects
+                </label>
+            
+                <input name="intruder" value="IR" id="id_intruder" type="checkbox">
+                <label for="id_intruder" id="intruder_label">
+                    <i class="fas fa-user-ninja"></i> Intruder
+                </label>
+            
+                <input name="malicious_code" value="MC" id="id_malicious_code" type="checkbox">
+                <label for="id_malicious_code" id="malicious_code_label">
+                    <i class="fas fa-bug"></i> Malicious Code
+                </label>
+            
+                <input name="infrastructure_outage" value="IO" id="id_infrastructure_outage" type="checkbox">
+                <label for="id_infrastructure_outage" id="infrastructure_outage_label">
+                    <i class="fas fa-server"></i> Infrastructure Outage
+                </label>
+            
+                <input name="insider" value="IS" id="id_insider" type="checkbox">
+                <label for="id_insider" id="insider_label">
+                    <i class="fas fa-user-friends"></i> Insider
+                </label>
+            
+                <input name="trusted_insider" value="TIS" id="id_trusted_insider" type="checkbox">
+                <label for="id_trusted_insider" id="trusted_insider_label">
+                    <i class="fas fa-shield-alt"></i> Trusted Insider
+                </label>
+            
+                <input name="clinical_users" value="CU" id="id_clinical_users" type="checkbox">
+                <label for="id_clinical_users" id="clinical_users_label">
+                    <i class="fas fa-user-md"></i> Clinical Users
+                </label>
+            
+                <input name="system_admins" value="SA" id="id_system_admins" type="checkbox">
+                <label for="id_system_admins" id="system_admins_label">
+                    <i class="fas fa-user-cog"></i> System Admins
+                </label>
+            
+                <input name="natural_or_man_made_disaster" value="ND" id="id_natural_or_man_made_disaster" type="checkbox">
+                <label for="id_natural_or_man_made_disaster" id="natural_or_man_made_disaster_label">
+                    <i class="fas fa-globe"></i> Natural or Man-made Disaster
+                </label>
+            
+                <input name="engineer" value="ENG" id="id_engineer" type="checkbox">
+                <label for="id_engineer" id="engineer_label">
+                    <i class="fas fa-cogs"></i> Engineer
+                </label>
+            
+                <input name="automated_or_remote_access" value="ARA" id="id_automated_or_remote_access" type="checkbox">
+                <label for="id_automated_or_remote_access" id="automated_or_remote_access_label">
+                    <i class="fas fa-robot"></i> Automated or Remote Access
+                </label>
+            
+                <input name="agent_none" value="NONE" id="id_agent_none" type="checkbox">
+                <label for="id_agent_none" id="id_agent_none_label">
+                    <i class="fas fa-times-circle"></i> None
+                </label>
+            </div>
+            
+
+            <div class="metric_asset">
+                <h4 id="TechnicalAssets_Heading">Technical Assets
+                    <i class="fa-solid fa-circle-question has-popover small-help-icon" data-trigger="hover" data-html="true" data-content="Allows you to indicate here the assets that are affected." data-placement="right" data-container="body">
+                    </i>
+                </h4>
+            
+                <input name="sensitive_data" value="SD" id="id_sensitive_data" type="checkbox">
+                <label for="id_sensitive_data" id="sensitive_data_label">
+                    <i class="fas fa-lock"></i> Sensitive Data
+                </label>
+            
+                <input name="personal_data" value="PD" id="id_personal_data" type="checkbox">
+                <label for="id_personal_data" id="personal_data_label">
+                    <i class="fas fa-id-card"></i> Personal Data
+                </label>
+            
+                <input name="hospital_network" value="HN" id="id_hospital_network" type="checkbox">
+                <label for="id_hospital_network" id="hospital_network_label">
+                    <i class="fas fa-hospital"></i> Hospital Network
+                </label>
+            
+                <input name="audit_trail_data" value="ATD" id="id_audit_trail_data" type="checkbox">
+                <label for="id_audit_trail_data" id="audit_trail_data_label">
+                    <i class="fas fa-file-alt"></i> Audit Trail Data
+                </label>
+            
+                <input name="configuration" value="CFG" id="id_configuration" type="checkbox">
+                <label for="id_configuration" id="configuration_label">
+                    <i class="fas fa-cogs"></i> Configuration
+                </label>
+            
+                <input name="system_software" value="SS" id="id_system_software" type="checkbox">
+                <label for="id_system_software" id="system_software_label">
+                    <i class="fas fa-desktop"></i> System Software
+                </label>
+            
+                <input name="hardware" value="HD" id="id_hardware" type="checkbox">
+                <label for="id_hardware" id="hardware_label">
+                    <i class="fas fa-microchip"></i> Hardware
+                </label>
+            
+                <input name="removable_media_with_ephi" value="RMP" id="id_removable_media_with_ephi" type="checkbox">
+                <label for="id_removable_media_with_ephi" id="removable_media_with_ephi_label">
+                    <i class="fas fa-usb"></i> Removable Media with ePHI
+                </label>
+            
+                <input name="removable_media" value="RM" id="id_RM" type="checkbox">
+                <label for="id_RM" id="removable_label">
+                    <i class="fas fa-hdd"></i> Removable Media
+                </label>
+            
+                <input name="logging_data" value="LD" id="id_logging_data" type="checkbox">
+                <label for="id_logging_data" id="logging_data_label">
+                    <i class="fas fa-database"></i> Logging Data
+                </label>
+            
+                <input name="product_documentation" value="PDC" id="id_product_documentation" type="checkbox">
+                <label for="id_product_documentation" id="product_documentation_label">
+                    <i class="fas fa-file-code"></i> Product Documentation
+                </label>
+            
+                <input name="personal" value="P" id="id_personal" type="checkbox">
+                <label for="id_personal" id="personal_label">
+                    <i class="fas fa-user"></i> Personal
+                </label>
+            
+                <input name="product" value="PRO" id="id_product" type="checkbox">
+                <label for="id_product" id="product_label">
+                    <i class="fas fa-box"></i> Product
+                </label>
+            
+                <input name="network" value="NET" id="id_network" type="checkbox">
+                <label for="id_network" id="network_label">
+                    <i class="fas fa-network-wired"></i> Network
+                </label>
+            
+                <input name="all_data" value="AD" id="id_all_data" type="checkbox">
+                <label for="id_all_data" id="all_data_label">
+                    <i class="fas fa-server"></i> All Data
+                </label>
+            
+                <input name="asset_none" value="N" id="id_asset_none" type="checkbox">
+                <label for="id_asset_none" id="id_asset_none_label">
+                    <i class="fas fa-ban"></i> None
+                </label>
+            </div>
+            
+            <br><br>
+            <h4 id="TechnicalImpact_Heading">Technical Impact
+                <i class="fa-solid fa-circle-question has-popover small-help-icon" data-trigger="hover" data-html="true" data-content="Rate here the impact on the CIA weight factors of the assets involved" data-placement="right" data-container="body">
+                </i>
+            </h4>
+            <div class="metric">
+                <h4 id="Confidentiality_Heading">Confidentiality
+                    
+                </h4>
+                <div class="rating-group">
+                    <button type="button" name="Confidentiality"  value="0" data-factor="Confidentiality" class="btn-scale btn-scale-asc-0">0</button>
+                    <button type="button" name="Confidentiality" value="1" data-factor="Confidentiality" class="btn-scale btn-scale-asc-1">1</button>
+                    <button type="button" name="Confidentiality" value="2" data-factor="Confidentiality" class="btn-scale btn-scale-asc-2">2</button>
+                    <button type="button" name="Confidentiality" value="3" data-factor="Confidentiality" class="btn-scale btn-scale-asc-3">3</button>
+                    <button type="button" name="Confidentiality" value="4" data-factor="Confidentiality" class="btn-scale btn-scale-asc-4">4</button>
+                    <button type="button" name="Confidentiality" value="5" data-factor="Confidentiality" class="btn-scale btn-scale-asc-5">5</button>
+                    <button type="button" name="Confidentiality" value="6" data-factor="Confidentiality" class="btn-scale btn-scale-asc-6">6</button>
+                    <button type="button" name="Confidentiality" value="7" data-factor="Confidentiality" class="btn-scale btn-scale-asc-7">7</button>
+                    <button type="button" name="Confidentiality" value="8" data-factor="Confidentiality" class="btn-scale btn-scale-asc-8">8</button>
+                    <button type="button" name="Confidentiality" value="9" data-factor="Confidentiality" class="btn-scale btn-scale-asc-9">9</button>
+                </div>
+            </div>
+            <div class="metric">
+                <h4 id="Integrity_Heading">Integrity</h4>
+                <div class="rating-group">
+                    <button type="button" name="Integrity"  value="0" data-factor="Integrity" class="btn-scale btn-scale-asc-0">0</button>
+                    <button type="button" name="Integrity" value="1" data-factor="Integrity" class="btn-scale btn-scale-asc-1">1</button>
+                    <button type="button" name="Integrity" value="2" data-factor="Integrity" class="btn-scale btn-scale-asc-2">2</button>
+                    <button type="button" name="Integrity" value="3" data-factor="Integrity" class="btn-scale btn-scale-asc-3">3</button>
+                    <button type="button" name="Integrity" value="4" data-factor="Integrity" class="btn-scale btn-scale-asc-4">4</button>
+                    <button type="button" name="Integrity" value="5" data-factor="Integrity" class="btn-scale btn-scale-asc-5">5</button>
+                    <button type="button" name="Integrity" value="6" data-factor="Integrity" class="btn-scale btn-scale-asc-6">6</button>
+                    <button type="button" name="Integrity" value="7" data-factor="Integrity" class="btn-scale btn-scale-asc-7">7</button>
+                    <button type="button" name="Integrity" value="8" data-factor="Integrity" class="btn-scale btn-scale-asc-8">8</button>
+                    <button type="button" name="Integrity" value="9" data-factor="Integrity" class="btn-scale btn-scale-asc-9">9</button>
+                </div>
+            </div>
+            <div class="metric">
+                <h4 id="Availability_Heading">Availability</h4>
+                <div class="rating-group">
+                    <button type="button" name="Availability"  value="0" data-factor="Availability" class="btn-scale btn-scale-asc-0">0</button>
+                    <button type="button" name="Availability" value="1" data-factor="Availability" class="btn-scale btn-scale-asc-1">1</button>
+                    <button type="button" name="Availability" value="2" data-factor="Availability" class="btn-scale btn-scale-asc-2">2</button>
+                    <button type="button" name="Availability" value="3" data-factor="Availability" class="btn-scale btn-scale-asc-3">3</button>
+                    <button type="button" name="Availability" value="4" data-factor="Availability" class="btn-scale btn-scale-asc-4">4</button>
+                    <button type="button" name="Availability" value="5" data-factor="Availability" class="btn-scale btn-scale-asc-5">5</button>
+                    <button type="button" name="Availability" value="6" data-factor="Availability" class="btn-scale btn-scale-asc-6">6</button>
+                    <button type="button" name="Availability" value="7" data-factor="Availability" class="btn-scale btn-scale-asc-7">7</button>
+                    <button type="button" name="Availability" value="8" data-factor="Availability" class="btn-scale btn-scale-asc-8">8</button>
+                    <button type="button" name="Availability" value="9" data-factor="Availability" class="btn-scale btn-scale-asc-9">9</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="initial_risk_score" class="initial_risk_score risk_score">
+            <p class="needBaseMetrics">Select values for all base metrics to generate score</p>
+            <span id="InitialRiskScore" class="ScoreValue"></span>
+            <span id="InitialRiskSeverity" class="ScoreSeverity"></span>
+        </div>
+    </fieldset>
+</fieldset>
+

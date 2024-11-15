@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block add_styles %}
+    {{ block.super }}
+    .chosen-container {
+    width: 70% !important;
+    }
+    .editor-toolbar, .editor-statusbar, .editor-preview-side, .CodeMirror {
+    width: 70% !important;
+    }
+{% endblock %}
+{% block add_css %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'easymde/dist/easymde.min.css' %}">
+    <link rel="stylesheet" href="{% static 'dojo/css/owasp_risk_calc.css' %}">
+{% endblock %}
+{% block content %}
+    {{ block.super }}
+    <h3> Risk Assessment</h3>
+    <div id="risk_assessment">
+        <p>
+        </p>
+        <p>
+            A risk assessment can be performed using OWASP risk methodlogy.
+        </p>
+        <br/>
+        <form id="edit_risk_assessment" enctype="multipart/form-data" class="form-horizontal" method="post">
+            {% csrf_token %}
+            {% for field in form %}
+                {% if not field.is_hidden %}
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">{{ field.label }} </label>
+                        <div class="col-sm-10">
+                            {{ field }}
+                            {{ field.errors }}
+                            {% if field.help_text %}
+                                <p style="width: 70%; font-style: italic; margin-bottom: 0px;">{{ field.help_text }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% else %}
+                    {{ field }}
+                {% endif %}    
+
+                {% if field.name == "assessed_findings" %}
+                <div id="vector_string_container" class="form-group">
+                    <label class="col-sm-2 control-label">Vector String</label>
+                    <div class="col-sm-10">
+                        <span id="vector_string_show">{{ vector_string }}</span>
+                    </div>
+                </div>
+                <div id="vulnerability_evaluation_container" class="form-group">
+                    <label class="col-sm-2 control-label">Vulnerability Evaluation</label>
+                    <div class="col-sm-10">
+                        {% include "dojo/owasp_risk_calculator_vulnerability_evalution.html" %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if field.name == "risk_statement" %}
+                    <div id="initial_risk_container" class="form-group">
+                        <label class="col-sm-2 control-label">Initial Risk</label>
+                        <div class="col-sm-10">
+                            {% include "dojo/owasp_risk_calculator_initial_risk.html" %}
+                        </div>
+                    </div>
+                {% endif %}
+            
+              <!-- Check if 'finding_mitigation' hasn't been rendered yet -->
+                {% if field.name == "finding_mitigation" %}
+                    <div id="residual_risk_container" class="form-group">
+                        <label class="col-sm-2 control-label">Residual Risk</label>
+                        <div class="col-sm-10">
+                            {% include "dojo/owasp_risk_calculator_residual_risk.html" %}
+                        </div>
+                    </div>
+
+                    <div id="business_risk_container" class="form-group">
+                        <label class="col-sm-2 control-label">Business Risk</label>
+                        <div class="col-sm-10">
+                            {% include "dojo/owasp_risk_calculator_business_risk.html" %}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+           <br/><br/>
+            <!-- Submit button -->
+            <div class="form-group">
+                <div class="col-sm-offset-2 col-sm-10">
+                    <input class="btn btn-primary" type="submit" value="Save"/>
+                </div>
+            </div>
+            <br/><br/>
+        </form>
+        
+    </div>
+{% endblock %}
+{% block postscript %}
+    {{ block.super }}
+<script type="application/javascript" src="{% static 'easymde/dist/easymde.min.js' %}"></script>
+<script type="text/javascript">
+    $("#add_risk_assessment textarea").each(function (index, elem) {
+        if (elem.id != 'id_threat_description' && elem.id != 'id_risk_statement'  && elem.id != 'finding_mitigation' && elem.id != 'id_acceptance_rational' && elem.id != 'id_acceptance_rational' && elem.id != 'id_related_hazard_item') {
+            if (elem.hasAttribute("required")) {
+                elem.removeAttribute("required");
+                elem.id = "req"
+            }
+
+            var mde = new EasyMDE({
+                spellChecker: false,
+                element: elem,
+                autofocus: false,
+                forceSync: true,
+                toolbar: ["bold", "italic", "heading", "|",
+                    "quote", "unordered-list", "ordered-list", "|",
+                    "link", "image", "|",
+                    "table", "horizontal-rule", "code", "|",
+                    "guide"
+                ]
+            });
+            mde.render();
+        }
+    });
+</script>
+{% endblock %}

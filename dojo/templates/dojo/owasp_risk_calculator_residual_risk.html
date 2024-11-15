@@ -1,0 +1,99 @@
+  <!-- Residual Risk Form -->
+  <fieldset id="residual_risk_calculator">
+    <fieldset id="ResidualRisksGroup">
+      <legend id="ResidualRiskGroup_Legend">Residual Risk Score</legend>
+      <div class="column column-left">
+        <div class="metric">
+          <h4 id="Delta_Likelihood_Heading">Reduction in threat score ?
+            <i>
+              <i class="fa-solid fa-circle-question has-popover small-help-icon" data-trigger="hover" data-html="true" data-content="Rate the reduction of in likelihood after mitigation is applied" data-placement="right" data-container="body">
+              </i>
+            </i>
+          </h4>
+          <div class="rating-group">
+                <button type="button" name="DLikelihood"  value="9" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-1">9</button>
+                <button type="button" name="DLikelihood" value="8" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-2">8</button>
+                <button type="button" name="DLikelihood" value="7" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-3">7</button>
+                <button type="button" name="DLikelihood" value="6" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-4">6</button>
+                <button type="button" name="DLikelihood" value="5" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-5">5</button>
+                <button type="button" name="DLikelihood" value="4" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-6">4</button>
+                <button type="button" name="DLikelihood" value="3" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-7">3</button>
+                <button type="button" name="DLikelihood" value="2" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-8">2</button>
+                <button type="button" name="DLikelihood" value="1" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-9">1</button>
+                <button type="button" name="DLikelihood" value="0" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-0">0</button>
+            </div>
+        </div>
+        
+        <div class="metric">
+          <h4 id="Delta_vulnerability_Heading">Reduction in vulnerability score ?</h4>
+          <div class="rating-group">
+                <button type="button" name="DVulnerability"  value="9" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-1">9</button>
+                <button type="button" name="DVulnerability" value="8" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-2">8</button>
+                <button type="button" name="DVulnerability" value="7" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-3">7</button>
+                <button type="button" name="DVulnerability" value="6" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-4">6</button>
+                <button type="button" name="DVulnerability" value="5" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-5">5</button>
+                <button type="button" name="DVulnerability" value="4" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-6">4</button>
+                <button type="button" name="DVulnerability" value="3" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-7">3</button>
+                <button type="button" name="DVulnerability" value="2" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-8">2</button>
+                <button type="button" name="DVulnerability" value="1" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-9">1</button>
+                <button type="button" name="DVulnerability" value="0" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-0">0</button>
+            </div>
+        </div>
+
+        <div class="metric">
+          <h4 id="Confidentiality_Heading">Residual Confidentiality Risk</h4>
+          <div class="rating-group">
+                <button type="button" name="Confidentiality"  value="9" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-1">9</button>
+                <button type="button" name="Confidentiality" value="8" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-2">8</button>
+                <button type="button" name="Confidentiality" value="7" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-3">7</button>
+                <button type="button" name="Confidentiality" value="6" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-4">6</button>
+                <button type="button" name="Confidentiality" value="5" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-5">5</button>
+                <button type="button" name="Confidentiality" value="4" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-6">4</button>
+                <button type="button" name="Confidentiality" value="3" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-7">3</button>
+                <button type="button" name="Confidentiality" value="2" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-8">2</button>
+                <button type="button" name="Confidentiality" value="1" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-9">1</button>
+                <button type="button" name="Confidentiality" value="0" data-factor="DeltaConfidentiality" class="btn-scale btn-scale-asc-0">0</button>
+            </div>
+        </div>
+        <div class="metric">
+        <h4 id="Integrity_Heading">Residual Integrity Risk</h4>
+        <div class="rating-group">
+          <button type="button" name="Integrity"  value="9" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-1">9</button>
+          <button type="button" name="Integrity" value="8" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-2">8</button>
+          <button type="button" name="Integrity" value="7" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-3">7</button>
+          <button type="button" name="Integrity" value="6" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-4">6</button>
+          <button type="button" name="Integrity" value="5" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-5">5</button>
+          <button type="button" name="Integrity" value="4" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-6">4</button>
+          <button type="button" name="Integrity" value="3" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-7">3</button>
+          <button type="button" name="Integrity" value="2" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-8">2</button>
+          <button type="button" name="Integrity" value="1" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-9">1</button>
+          <button type="button" name="Integrity" value="0" data-factor="DeltaIntegrity" class="btn-scale btn-scale-asc-0">0</button>
+        </div>
+      </div>
+        
+        
+        <div class="metric">
+          <h4 id="Availability_Heading">Residual Availability Risk</h4>
+          <div class="rating-group">
+                    <button type="button" name="Availability"  value="9" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-1">9</button>
+                    <button type="button" name="Availability" value="8" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-2">8</button>
+                    <button type="button" name="Availability" value="7" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-3">7</button>
+                    <button type="button" name="Availability" value="6" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-4">6</button>
+                    <button type="button" name="Availability" value="5" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-5">5</button>
+                    <button type="button" name="Availability" value="4" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-6">4</button>
+                    <button type="button" name="Availability" value="3" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-7">3</button>
+                    <button type="button" name="Availability" value="2" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-8">2</button>
+                    <button type="button" name="Availability" value="1" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-9">1</button>
+                    <button type="button" name="Availability" value="0" data-factor="DeltaAvailability" class="btn-scale btn-scale-asc-0">0</button>
+                </div>
+        </div>
+    </div>
+
+      <div id="residual_risk_score" class="residual_risk_score risk_score">
+        <p class="needBaseMetrics">Select values for all base metrics to generate score</p>
+        <span id="ResidualRiskScore" class="ScoreValue"></span>
+        <span id="ResidualRiskSeverity" class="ScoreSeverity"></span>
+      </div>
+    </fieldset>
+  </fieldset>
+

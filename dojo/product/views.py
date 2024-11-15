@@ -404,6 +404,7 @@ def finding_querys(request, prod):
     week = end_date - timedelta(days=7)  # seven days and /newer are considered "new"
 
     filters["accepted"] = findings_qs.filter(finding_helper.ACCEPTED_FINDINGS_QUERY).filter(date__range=[start_date, end_date]).order_by("date")
+    filters["assessed"] = findings_qs.filter(finding_helper.ASSESSED_FINDINGS_QUERY).filter(date__range=[start_date, end_date]).order_by("date")
     filters["verified"] = findings_qs.filter(finding_helper.VERIFIED_FINDINGS_QUERY).filter(date__range=[start_date, end_date]).order_by("date")
     filters["new_verified"] = findings_qs.filter(finding_helper.VERIFIED_FINDINGS_QUERY).filter(date__range=[start_date, end_date]).order_by("date")
     filters["open"] = findings_qs.filter(finding_helper.OPEN_FINDINGS_QUERY).filter(date__range=[start_date, end_date]).order_by("date")

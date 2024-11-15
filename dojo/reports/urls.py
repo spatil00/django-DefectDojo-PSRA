@@ -36,4 +36,6 @@ urlpatterns = [
         views.CSVExportView.as_view(), name="csv_export"),
     re_path(r"^reports/excel_export$",
         views.ExcelExportView.as_view(), name="excel_export"),
+    re_path(r"^reports/psra_excel_export$",
+        views.PSRAExcelExportView.as_view(), name="psra_excel_export"),
 ]

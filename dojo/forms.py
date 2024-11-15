@@ -84,6 +84,7 @@ from dojo.models import (
     Question,
     Regulation,
     Risk_Acceptance,
+    Risk_Assessment,
     SLA_Configuration,
     Stub_Finding,
     System_Settings,
@@ -334,7 +335,7 @@ class ProductForm(forms.ModelForm):
         model = Product
         fields = ["name", "description", "tags", "product_manager", "technical_contact", "team_manager", "prod_type", "sla_configuration", "regulations",
                 "business_criticality", "platform", "lifecycle", "origin", "user_records", "revenue", "external_audience", "enable_product_tag_inheritance",
-                "internet_accessible", "enable_simple_risk_acceptance", "enable_full_risk_acceptance", "disable_sla_breach_notifications"]
+                "internet_accessible", "enable_simple_risk_acceptance", "enable_full_risk_acceptance", "enable_risk_assessment" ,"disable_sla_breach_notifications"]
 
 
 class DeleteProductForm(forms.ModelForm):
@@ -798,6 +799,71 @@ class MergeFindings(forms.ModelForm):
         model = Finding
         fields = ["append_description", "add_endpoints", "append_reference"]
 
+class EditRiskAssessmentForm(forms.ModelForm):
+      def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+class RiskAssessmentForm(EditRiskAssessmentForm):
+    finding_description = forms.CharField(
+        widget=forms.Textarea(attrs={'style': 'height: 20px;'}),
+        label="Finding Description",
+        help_text="Conditions in a system’s design, implementation, or operation and management that makes it susceptible to a threat. ",
+        required=False
+    )
+
+    assessed_findings = forms.ModelMultipleChoiceField(
+        queryset=Finding.objects.none(), required=True,
+        widget=forms.widgets.SelectMultiple(attrs={"size": 10}),
+        help_text=("Active, verified findings listed, please select to add findings.")
+    )
+
+    vector_string = forms.CharField(
+        max_length=255, 
+        required=False, 
+        widget=forms.HiddenInput()  # Hidden field
+    )
+
+    '''threat_description = forms.CharField(required=False, max_length=2400,
+                            widget=forms.Textarea,
+                            help_text=("Optional desription of threat Recommended format:\n ([Motive])[outcome] via [access] of [asset](to/by [agent]) (leading to [impact])"),
+                            label="Threat Description")
+    
+    risk_statement = forms.CharField(required=False, max_length=2400,
+                            widget=forms.Textarea,
+                            help_text=("Describe the scenario of how the threat would act on the the vulneraiblity,including the potential resulting consequence in terms of technical impact to CIA and assets.\n Cause(s), contributing factor(s) Describe risk scenario, vulnerability and mitigated factors = vulnerability + exploitability"),
+                            label="Risk Statement")'''
+
+    finding_mitigation = forms.CharField(required=False, max_length=2400,
+                            widget=forms.Textarea, 
+                            label="Risk Mitigation")
+    
+    #TODO: These blow two fields should link to Risk Acceptance workflow 
+    accept_risk = forms.BooleanField(required=False, label="Accept Risk")
+
+    '''rational_and_actions = forms.CharField(required=False, max_length=2400,
+                                          widget=forms.Textarea, 
+                                          label="Rational and Actions ?")
+
+    related_hazard_item = forms.CharField(required=False, max_length=2400,
+                                          widget=forms.Textarea, label="Related Hazard ?")
+'''
+    class Meta:
+        model = Risk_Assessment
+        fields = ['name', 'finding_description', 'vulnerability_cause','assessed_findings',
+                  'vector_string','threat_types', 'threat_description','risk_statement','finding_mitigation','mitigation_types','mitigation_reference','accept_risk','rational_and_actions', 'related_hazard_item']
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.finding_mitigation = self.cleaned_data.get('finding_mitigation')
+        instance.accept_risk = self.cleaned_data.get('accept_risk')
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["assessed_findings"].queryset = get_authorized_findings(Permissions.Risk_Assessment)
 
 class EditRiskAcceptanceForm(forms.ModelForm):
     # unfortunately django forces us to repeat many things here. choices, default, required etc.

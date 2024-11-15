@@ -42,6 +42,7 @@ from dojo.endpoint.queries import get_authorized_endpoints
 from dojo.engagement.queries import get_authorized_engagements
 from dojo.finding.helper import (
     ACCEPTED_FINDINGS_QUERY,
+    ASSESSED_FINDINGS_QUERY,
     CLOSED_FINDINGS_QUERY,
     FALSE_POSITIVE_FINDINGS_QUERY,
     INACTIVE_FINDINGS_QUERY,
@@ -155,6 +156,9 @@ class FindingStatusFilter(ChoiceFilter):
 
     def risk_accepted(self, qs, name):
         return qs.filter(ACCEPTED_FINDINGS_QUERY)
+    
+    def risk_assessed(self, qs, name):
+        return qs.filter(ASSESSED_FINDINGS_QUERY)
 
     def closed(self, qs, name):
         return qs.filter(CLOSED_FINDINGS_QUERY)
@@ -735,6 +739,10 @@ class ReportBooleanFilter(ChoiceFilter):
         return self.options[value][1](qs, self.field_name)
 
 
+class ReportRiskAssessedFilter(ChoiceFilter):
+    pass 
+
+
 class ReportRiskAcceptanceFilter(ChoiceFilter):
 
     def any(self, qs, name):
@@ -743,6 +751,9 @@ class ReportRiskAcceptanceFilter(ChoiceFilter):
     def accepted(self, qs, name):
         # return qs.filter(risk_acceptance__isnull=False)
         return qs.filter(ACCEPTED_FINDINGS_QUERY)
+    
+    def assessed(self, qs, name):
+        return qs.filter(ASSESSED_FINDINGS_QUERY)
 
     def not_accepted(self, qs, name):
         return qs.filter(NOT_ACCEPTED_FINDINGS_QUERY)
