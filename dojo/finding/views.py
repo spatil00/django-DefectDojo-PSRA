@@ -483,7 +483,7 @@ class ListAcceptedFindings(ListFindings):
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
 class ListAssessedFindings(ListFindings):
-    def get(self, request: HttpRequest, product_id: Optional[int] = None, engagement_id: Optional[int] = None):
+    def get(self, request: HttpRequest, product_id: int = None, engagement_id: int = None):
         self.filter_name = "Assessed"
         return super().get(request, product_id=product_id, engagement_id=engagement_id)
 
