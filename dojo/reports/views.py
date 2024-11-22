@@ -14,6 +14,9 @@ from django.views import View
 from django.contrib.staticfiles import finders
 from openpyxl import Workbook,load_workbook
 from openpyxl.styles import Font
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.worksheet._reader")
+
 
 from dojo.authorization.authorization import user_has_permission_or_403
 from dojo.authorization.authorization_decorators import user_is_authorized
