@@ -15,7 +15,7 @@ from django.contrib.staticfiles import finders
 from openpyxl import Workbook,load_workbook
 from openpyxl.styles import Font
 import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.worksheet._reader")
+
 
 
 from dojo.authorization.authorization import user_has_permission_or_403
@@ -1202,6 +1202,9 @@ class PSRAExcelExportView(View):
 
 
     def get(self, request):
+        warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.worksheet._reader")
+        warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.reader.workbook")
+        
         template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
         workbook = load_workbook(template_path,data_only=False)
         
