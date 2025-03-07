@@ -12,7 +12,7 @@ class GenericJSONParser:
     def _get_test_json(self, data):
         test_internal = ParserTest(
             name=data.get("name", self.ID),
-            type=data.get("type", self.ID),
+            parser_type=data.get("type", self.ID),
             version=data.get("version"),
         )
         test_internal.findings = []
@@ -45,6 +45,8 @@ class GenericJSONParser:
                 "date",
                 "cwe",
                 "cve",
+                "epss_score",
+                "epss_percentile",
                 "cvssv3",
                 "cvssv3_score",
                 "mitigation",

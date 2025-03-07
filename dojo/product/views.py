@@ -351,13 +351,11 @@ def identify_view(request):
     if view:
         # value of view is reflected in the template, make sure it's valid
         # although any XSS should be catch by django autoescape, we see people sometimes using '|safe'...
-        if view in ["Endpoint", "Finding"]:
+        if view in {"Endpoint", "Finding"}:
             return view
         msg = 'invalid view, view must be "Endpoint" or "Finding"'
         raise ValueError(msg)
-    if get_data.get("finding__severity", None):
-        return "Endpoint"
-    if get_data.get("false_positive", None):
+    if get_data.get("finding__severity", None) or get_data.get("false_positive", None):
         return "Endpoint"
     referer = request.META.get("HTTP_REFERER", None)
     if referer:
@@ -549,7 +547,7 @@ def view_product_metrics(request, pid):
     end_date = filters["end_date"]
 
     r = relativedelta(end_date, start_date)
-    weeks_between = int(ceil((((r.years * 12) + r.months) * 4.33) + (r.days / 7)))
+    weeks_between = ceil((((r.years * 12) + r.months) * 4.33) + (r.days / 7))
     if weeks_between <= 0:
         weeks_between += 2
 
@@ -601,7 +599,7 @@ def view_product_metrics(request, pid):
         unix_timestamp = (tcalendar.timegm(date.timetuple()) * 1000)
 
         # Open findings
-        if open_findings_dict.get(finding.get("id", None), None):
+        if open_findings_dict.get(finding.get("id", None)):
             if unix_timestamp not in critical_weekly:
                 critical_weekly[unix_timestamp] = {"count": 0, "week": html_date}
             if unix_timestamp not in high_weekly:
@@ -615,13 +613,11 @@ def view_product_metrics(request, pid):
                 open_close_weekly[unix_timestamp] = {"closed": 0, "open": 1, "accepted": 0}
                 open_close_weekly[unix_timestamp]["week"] = html_date
 
-            if view == "Finding":
-                severity = finding.get("severity")
-            elif view == "Endpoint":
+            if view == "Finding" or view == "Endpoint":
                 severity = finding.get("severity")
 
             finding_age = calculate_finding_age(finding)
-            if open_objs_by_age.get(finding_age, None):
+            if open_objs_by_age.get(finding_age):
                 open_objs_by_age[finding_age] += 1
             else:
                 open_objs_by_age[finding_age] = 1
@@ -656,7 +652,7 @@ def view_product_metrics(request, pid):
                 open_objs_by_severity[finding.get("severity")] += 1
 
         # Close findings
-        elif closed_findings_dict.get(finding.get("id", None), None):
+        elif closed_findings_dict.get(finding.get("id", None)):
             if unix_timestamp in open_close_weekly:
                 open_close_weekly[unix_timestamp]["closed"] += 1
             else:
@@ -667,7 +663,7 @@ def view_product_metrics(request, pid):
                 closed_objs_by_severity[finding.get("severity")] += 1
 
         # Risk Accepted findings
-        if accepted_findings_dict.get(finding.get("id", None), None):
+        if accepted_findings_dict.get(finding.get("id", None)):
             if unix_timestamp in open_close_weekly:
                 open_close_weekly[unix_timestamp]["accepted"] += 1
             else:
@@ -916,10 +912,7 @@ def new_product(request, ptid=None):
         if get_system_setting("enable_jira"):
             jira_project_form = JIRAProjectForm()
 
-        if get_system_setting("enable_github"):
-            gform = GITHUB_Product_Form()
-        else:
-            gform = None
+        gform = GITHUB_Product_Form() if get_system_setting("enable_github") else None
 
     add_breadcrumb(title=_("New Product"), top_level=False, request=request)
     return render(request, "dojo/new_product.html",
@@ -965,11 +958,8 @@ def edit_product(request, pid):
 
             if get_system_setting("enable_github") and github_inst:
                 gform = GITHUB_Product_Form(request.POST, instance=github_inst)
-                # need to handle delete
-                try:
+                if gform.is_valid():
                     gform.save()
-                except:
-                    pass
             elif get_system_setting("enable_github"):
                 gform = GITHUB_Product_Form(request.POST)
                 if gform.is_valid():
@@ -993,10 +983,7 @@ def edit_product(request, pid):
             jform = None
 
         if github_enabled:
-            if github_inst is not None:
-                gform = GITHUB_Product_Form(instance=github_inst)
-            else:
-                gform = GITHUB_Product_Form()
+            gform = GITHUB_Product_Form(instance=github_inst) if github_inst is not None else GITHUB_Product_Form()
         else:
             gform = None
 
@@ -1058,7 +1045,7 @@ def delete_product(request, pid):
 
 
 @user_is_authorized(Product, Permissions.Engagement_Add, "pid")
-def new_eng_for_app(request, pid, cicd=False):
+def new_eng_for_app(request, pid, *, cicd=False):
     jira_project_form = None
     jira_epic_form = None
 
@@ -1126,10 +1113,7 @@ def new_eng_for_app(request, pid, cicd=False):
             logger.debug("showing jira-epic-form")
             jira_epic_form = JIRAEngagementForm()
 
-    if cicd:
-        title = _("New CI/CD Engagement")
-    else:
-        title = _("New Interactive Engagement")
+    title = _("New CI/CD Engagement") if cicd else _("New Interactive Engagement")
 
     product_tab = Product_Tab(product, title=title, tab="engagements")
     return render(request, "dojo/new_eng.html", {
@@ -1398,6 +1382,7 @@ class AdHocFindingView(View):
             finding.reporter = request.user
             finding.numerical_severity = Finding.get_numerical_severity(finding.severity)
             finding.tags = context["form"].cleaned_data["tags"]
+            finding.unsaved_vulnerability_ids = context["form"].cleaned_data["vulnerability_ids"].split()
             finding.save()
             # Save and add new endpoints
             finding_helper.add_endpoints(finding, context["form"])
@@ -1774,7 +1759,7 @@ def add_api_scan_configuration(request, pid):
                     return HttpResponseRedirect(reverse("add_api_scan_configuration", args=(pid,)))
                 return HttpResponseRedirect(reverse("view_api_scan_configurations", args=(pid,)))
             except Exception as e:
-                logger.exception(e)
+                logger.exception("Unable to add API Scan Configuration")
                 messages.add_message(request,
                                      messages.ERROR,
                                      str(e),
@@ -1882,7 +1867,7 @@ def delete_api_scan_configuration(request, pid, pascid):
 
 @user_is_authorized(Product_Group, Permissions.Product_Group_Edit, "groupid")
 def edit_product_group(request, groupid):
-    logger.exception(groupid)
+    logger.error(groupid)
     group = get_object_or_404(Product_Group, pk=groupid)
     groupform = Edit_Product_Group_Form(instance=group)
 

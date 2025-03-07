@@ -1,3 +1,5 @@
+import base64
+import collections
 import json
 import logging
 import re
@@ -20,6 +22,7 @@ from rest_framework.exceptions import ValidationError as RestFrameworkValidation
 from rest_framework.fields import DictField, MultipleChoiceField
 
 import dojo.jira_link.helper as jira_helper
+import dojo.risk_acceptance.helper as ra_helper
 from dojo.authorization.authorization import user_has_permission
 from dojo.authorization.roles_permissions import Permissions
 from dojo.endpoint.utils import endpoint_filter, endpoint_meta_import
@@ -44,6 +47,7 @@ from dojo.models import (
     Answer,
     Answered_Survey,
     App_Analysis,
+    BurpRawRequestResponse,
     Check_List,
     ChoiceAnswer,
     ChoiceQuestion,
@@ -108,7 +112,6 @@ from dojo.models import (
     Vulnerability_Id_Template,
     get_current_date,
 )
-from dojo.risk_acceptance.helper import add_findings_to_risk_acceptance, remove_finding_from_risk_acceptance
 from dojo.tools.factory import (
     get_choices_sorted,
     requires_file,
@@ -164,7 +167,7 @@ class ImportStatisticsSerializer(serializers.Serializer):
     )
     delta = DeltaStatisticsSerializer(
         required=False,
-        help_text="Finding statistics of modifications made by the reimport. Only available when TRACK_IMPORT_HISTORY hass not disabled.",
+        help_text="Finding statistics of modifications made by the reimport. Only available when TRACK_IMPORT_HISTORY has not been disabled.",
     )
     after = SeverityStatusStatisticsSerializer(
         help_text="Finding statistics as stored in Defect Dojo after the import",
@@ -280,10 +283,10 @@ class TaggitSerializer(serializers.Serializer):
         return (to_be_tagged, validated_data)
 
 
-class RequestResponseDict(list):
+class RequestResponseDict(collections.UserList):
     def __init__(self, *args, **kwargs):
         pretty_print = kwargs.pop("pretty_print", True)
-        list.__init__(self, *args, **kwargs)
+        collections.UserList.__init__(self, *args, **kwargs)
         self.pretty_print = pretty_print
 
     def __add__(self, rhs):
@@ -368,10 +371,7 @@ class RequestResponseSerializerField(serializers.ListSerializer):
         if not isinstance(value, RequestResponseDict):
             if not isinstance(value, list):
                 # this will trigger when a queryset is found...
-                if self.order_by:
-                    burps = value.all().order_by(*self.order_by)
-                else:
-                    burps = value.all()
+                burps = value.all().order_by(*self.order_by) if self.order_by else value.all()
                 value = [
                     {
                         "request": burp.get_request(),
@@ -385,6 +385,46 @@ class RequestResponseSerializerField(serializers.ListSerializer):
 
 class BurpRawRequestResponseSerializer(serializers.Serializer):
     req_resp = RequestResponseSerializerField(required=True)
+
+
+class BurpRawRequestResponseMultiSerializer(serializers.ModelSerializer):
+    burpRequestBase64 = serializers.CharField()
+    burpResponseBase64 = serializers.CharField()
+
+    def to_representation(self, data):
+        return {
+            "id": data.id,
+            "finding": data.finding.id,
+            "burpRequestBase64": data.burpRequestBase64.decode("utf-8"),
+            "burpResponseBase64": data.burpResponseBase64.decode("utf-8"),
+        }
+
+    def validate(self, data):
+        b64request = data.get("burpRequestBase64", None)
+        b64response = data.get("burpResponseBase64", None)
+        finding = data.get("finding", None)
+        # Make sure all fields are present
+        if not b64request or not b64response or not finding:
+            msg = "burpRequestBase64, burpResponseBase64, and finding are required."
+            raise ValidationError(msg)
+        # Verify we have true base64 decoding
+        try:
+            base64.b64decode(b64request, validate=True)
+            base64.b64decode(b64response, validate=True)
+        except Exception as e:
+            msg = "Inputs need to be valid base64 encodings"
+            raise ValidationError(msg) from e
+        # Encode the data in utf-8 to remove any bad characters
+        data["burpRequestBase64"] = b64request.encode("utf-8")
+        data["burpResponseBase64"] = b64response.encode("utf-8")
+        # Run the model validation - an ValidationError will be raised if there is an issue
+        BurpRawRequestResponse(finding=finding, burpRequestBase64=b64request, burpResponseBase64=b64response).clean()
+
+        return data
+
+    class Meta:
+        model = BurpRawRequestResponse
+        fields = "__all__"
 
 
 class MetaSerializer(serializers.ModelSerializer):
@@ -414,6 +454,51 @@ class MetaSerializer(serializers.ModelSerializer):
     class Meta:
         model = DojoMeta
         fields = "__all__"
+
+
+class MetadataSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+    value = serializers.CharField(max_length=300)
+
+
+class MetaMainSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        required=False,
+        default=None,
+        allow_null=True,
+    )
+    endpoint = serializers.PrimaryKeyRelatedField(
+        queryset=Endpoint.objects.all(),
+        required=False,
+        default=None,
+        allow_null=True,
+    )
+    finding = serializers.PrimaryKeyRelatedField(
+        queryset=Finding.objects.all(),
+        required=False,
+        default=None,
+        allow_null=True,
+    )
+    metadata = MetadataSerializer(many=True)
+
+    def validate(self, data):
+        product_id = data.get("product", None)
+        endpoint_id = data.get("endpoint", None)
+        finding_id = data.get("finding", None)
+        metadata = data.get("metadata")
+
+        for item in metadata:
+            # this will only verify that one and only one of product, endpoint, or finding is passed...
+            DojoMeta(product=product_id,
+                     endpoint=endpoint_id,
+                     finding=finding_id,
+                     name=item.get("name"),
+                     value=item.get("value")).clean()
+
+        return data
 
 
 class ProductMetaSerializer(serializers.ModelSerializer):
@@ -506,10 +591,7 @@ class UserSerializer(serializers.ModelSerializer):
         return instance
 
     def create(self, validated_data):
-        if "password" in validated_data:
-            password = validated_data.pop("password")
-        else:
-            password = None
+        password = validated_data.pop("password", None)
 
         new_configuration_permissions = None
         if (
@@ -535,10 +617,7 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
     def validate(self, data):
-        if self.instance is not None:
-            instance_is_superuser = self.instance.is_superuser
-        else:
-            instance_is_superuser = False
+        instance_is_superuser = self.instance.is_superuser if self.instance is not None else False
         data_is_superuser = data.get("is_superuser", False)
         if not self.context["request"].user.is_superuser and (
             instance_is_superuser or data_is_superuser
@@ -546,7 +625,7 @@ class UserSerializer(serializers.ModelSerializer):
             msg = "Only superusers are allowed to add or edit superusers."
             raise ValidationError(msg)
 
-        if self.context["request"].method in ["PATCH", "PUT"] and "password" in data:
+        if self.context["request"].method in {"PATCH", "PUT"} and "password" in data:
             msg = "Update of password though API is not allowed"
             raise ValidationError(msg)
         if self.context["request"].method == "POST" and "password" not in data and settings.REQUIRE_PASSWORD_ON_USER:
@@ -1171,7 +1250,7 @@ class EndpointSerializer(TaggitSerializer, serializers.ModelSerializer):
 
     def validate(self, data):
 
-        if not self.context["request"].method == "PATCH":
+        if self.context["request"].method != "PATCH":
             if "product" not in data:
                 msg = "Product is required"
                 raise serializers.ValidationError(msg)
@@ -1219,7 +1298,7 @@ class EndpointSerializer(TaggitSerializer, serializers.ModelSerializer):
             product=endpoint_ins.product,
         )
         if (
-            self.context["request"].method in ["PUT", "PATCH"]
+            self.context["request"].method in {"PUT", "PATCH"}
             and (
                 (endpoint.count() > 1)
                 or (
@@ -1286,6 +1365,11 @@ class JIRAIssueSerializer(serializers.ModelSerializer):
         else:
             msg = "Either engagement or finding or finding_group has to be set."
             raise serializers.ValidationError(msg)
+
+        if finding:
+            if (linked_finding := jira_helper.jira_already_linked(finding, data.get("jira_key"), data.get("jira_id"))) is not None:
+                msg = "JIRA issue " + data.get("jira_key") + " already linked to " + reverse("view_finding", args=(linked_finding.id,))
+                raise serializers.ValidationError(msg)
 
         return data
 
@@ -1448,7 +1532,7 @@ class RiskAcceptanceSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         instance = super().create(validated_data)
         user = getattr(self.context.get("request", None), "user", None)
-        add_findings_to_risk_acceptance(user, instance, instance.accepted_findings.all())
+        ra_helper.add_findings_to_risk_acceptance(user, instance, instance.accepted_findings.all())
         return instance
 
     def update(self, instance, validated_data):
@@ -1464,10 +1548,10 @@ class RiskAcceptanceSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
         user = getattr(self.context.get("request", None), "user", None)
         # Add the new findings
-        add_findings_to_risk_acceptance(user, instance, findings_to_add)
+        ra_helper.add_findings_to_risk_acceptance(user, instance, findings_to_add)
         # Remove the ones that were not present in the payload
         for finding in findings_to_remove:
-            remove_finding_from_risk_acceptance(user, instance, finding)
+            ra_helper.remove_finding_from_risk_acceptance(user, instance, finding)
         return instance
 
     @extend_schema_field(serializers.CharField())
@@ -1518,7 +1602,7 @@ class RiskAcceptanceSerializer(serializers.ModelSerializer):
             raise PermissionDenied(msg)
         if self.context["request"].method == "POST":
             validate_findings_have_same_engagement(finding_objects)
-        elif self.context["request"].method in ["PATCH", "PUT"]:
+        elif self.context["request"].method in {"PATCH", "PUT"}:
             existing_findings = Finding.objects.filter(risk_acceptance=self.instance.id)
             existing_and_new_findings = existing_findings | finding_objects
             validate_findings_have_same_engagement(existing_and_new_findings)
@@ -1635,7 +1719,7 @@ class FindingSerializer(TaggitSerializer, serializers.ModelSerializer):
     )
     push_to_jira = serializers.BooleanField(default=False)
     age = serializers.IntegerField(read_only=True)
-    sla_days_remaining = serializers.IntegerField(read_only=True)
+    sla_days_remaining = serializers.IntegerField(read_only=True, allow_null=True)
     finding_meta = FindingMetaSerializer(read_only=True, many=True)
     related_fields = serializers.SerializerMethodField(allow_null=True)
     # for backwards compatibility
@@ -1682,6 +1766,17 @@ class FindingSerializer(TaggitSerializer, serializers.ModelSerializer):
 
     def get_display_status(self, obj) -> str:
         return obj.status()
+
+    def process_risk_acceptance(self, data):
+        is_risk_accepted = data.get("risk_accepted")
+        # Do not take any action if the `risk_accepted` was not passed
+        if not isinstance(is_risk_accepted, bool):
+            return
+        # Determine how to proceed based on the value of `risk_accepted`
+        if is_risk_accepted and not self.instance.risk_accepted and self.instance.test.engagement.product.enable_simple_risk_acceptance and not data.get("active", False):
+            ra_helper.simple_risk_accept(self.context["request"].user, self.instance)
+        elif not is_risk_accepted and self.instance.risk_accepted:  # turning off risk_accepted
+            ra_helper.risk_unaccept(self.context["request"].user, self.instance)
 
     # Overriding this to push add Push to JIRA functionality
     def update(self, instance, validated_data):
@@ -1758,6 +1853,10 @@ class FindingSerializer(TaggitSerializer, serializers.ModelSerializer):
             msg = "Active findings cannot be risk accepted."
             raise serializers.ValidationError(msg)
 
+        # assuming we made it past the validations,call risk acceptance properly to make sure notes, etc get created
+        # doing it here instead of in update because update doesn't know if the value changed
+        self.process_risk_acceptance(data)
+
         return data
 
     def validate_severity(self, value: str) -> str:
@@ -1821,43 +1920,42 @@ class FindingCreateSerializer(TaggitSerializer, serializers.ModelSerializer):
 
     # Overriding this to push add Push to JIRA functionality
     def create(self, validated_data):
-        # remove tags from validated data and store them seperately
+        # Pop off of some fields that should not be sent to the model at this time
         to_be_tagged, validated_data = self._pop_tags(validated_data)
-
-        # pop push_to_jira so it won't get send to the model as a field
-        push_to_jira = validated_data.pop("push_to_jira")
-
-        # Save vulnerability ids and pop them
-        if "vulnerability_id_set" in validated_data:
-            vulnerability_id_set = validated_data.pop("vulnerability_id_set")
-        else:
-            vulnerability_id_set = None
-
-        # first save, so we have an instance to get push_all_to_jira from
-        new_finding = super(TaggitSerializer, self).create(validated_data)
-
-        if vulnerability_id_set:
-            vulnerability_ids = []
-            for vulnerability_id in vulnerability_id_set:
-                vulnerability_ids.append(vulnerability_id["vulnerability_id"])
-            validated_data["cve"] = vulnerability_ids[0]
-            save_vulnerability_ids(new_finding, vulnerability_ids)
-            new_finding.save()
-
+        push_to_jira = validated_data.pop("push_to_jira", False)
+        notes = validated_data.pop("notes", None)
+        found_by = validated_data.pop("found_by", None)
+        reviewers = validated_data.pop("reviewers", None)
+        # Process the vulnerability IDs specially
+        parsed_vulnerability_ids = []
+        if (vulnerability_ids := validated_data.pop("vulnerability_id_set", None)):
+            for vulnerability_id in vulnerability_ids:
+                parsed_vulnerability_ids.append(vulnerability_id["vulnerability_id"])
+            validated_data["cve"] = parsed_vulnerability_ids[0]
+        # Create a findings in memory so that we have access to unsaved_vulnerability_ids
+        new_finding = Finding(**validated_data)
+        new_finding.unsaved_vulnerability_ids = parsed_vulnerability_ids
+        new_finding.save()
+        # Deal with all of the many to many things
+        if notes:
+            new_finding.notes.set(notes)
+        if found_by:
+            new_finding.found_by.set(found_by)
+        if reviewers:
+            new_finding.reviewers.set(reviewers)
+        if parsed_vulnerability_ids:
+            save_vulnerability_ids(new_finding, parsed_vulnerability_ids)
         # TODO: JIRA can we remove this is_push_all_issues, already checked in
         # apiv2 viewset?
         push_to_jira = push_to_jira or jira_helper.is_push_all_issues(
             new_finding,
         )
-
         # If we need to push to JIRA, an extra save call is needed.
         # TODO: try to combine create and save, but for now I'm just fixing a
         # bug and don't want to change to much
         if push_to_jira or new_finding:
             new_finding.save(push_to_jira=push_to_jira)
-
-        # not sure why we are returning a tag_object, but don't want to change
-        # too much now as we're just fixing a bug
+        # This final call will save the finding again and return it
         return self._save_tags(new_finding, to_be_tagged)
 
     def validate(self, data):
@@ -2045,10 +2143,10 @@ class CommonImportScanSerializer(serializers.Serializer):
         help_text="Minimum severity level to be imported",
     )
     active = serializers.BooleanField(
-        help_text="Override the active setting from the tool.",
+        help_text="Force findings to be active/inactive or default to the original tool (None)", required=False,
     )
     verified = serializers.BooleanField(
-        help_text="Override the verified setting from the tool.",
+        help_text="Force findings to be verified/not verified or default to the original tool (None)", required=False,
     )
 
     # TODO: why do we allow only existing endpoints?
@@ -2247,7 +2345,7 @@ class CommonImportScanSerializer(serializers.Serializer):
 
         # engagement end date was not being used at all and so target_end would also turn into None
         # in this case, do not want to change target_end unless engagement_end exists
-        eng_end_date = context.get("engagement_end_date", None)
+        eng_end_date = context.get("engagement_end_date")
         if eng_end_date:
             context["target_end"] = context.get("engagement_end_date")
 
@@ -2315,7 +2413,7 @@ class ImportScanSerializer(CommonImportScanSerializer):
             # Raise an explicit drf exception here
             raise ValidationError(str(e))
 
-    def save(self, push_to_jira=False):
+    def save(self, *, push_to_jira=False):
         # Go through the validate method
         data = self.validated_data
         # Extract the data from the form
@@ -2457,7 +2555,7 @@ class ReImportScanSerializer(TaggitSerializer, CommonImportScanSerializer):
         except ValueError as ve:
             raise Exception(ve)
 
-    def save(self, push_to_jira=False):
+    def save(self, *, push_to_jira=False):
         # Go through the validate method
         data = self.validated_data
         # Extract the data from the form
@@ -2563,7 +2661,7 @@ class ImportLanguagesSerializer(serializers.Serializer):
         Languages.objects.filter(product=product).delete()
 
         for name in deserialized:
-            if name not in ["header", "SUM"]:
+            if name not in {"header", "SUM"}:
                 element = deserialized[name]
 
                 try:
@@ -2695,6 +2793,11 @@ class ReportGenerateSerializer(serializers.Serializer):
     finding_notes = FindingToNotesSerializer(
         many=True, allow_null=True, required=False,
     )
+
+
+class EngagementUpdateJiraEpicSerializer(serializers.Serializer):
+    epic_name = serializers.CharField(required=False, max_length=200)
+    epic_priority = serializers.CharField(required=False, allow_null=True)
 
 
 class TagSerializer(serializers.Serializer):

@@ -15,15 +15,15 @@ class HCLAppScanParser:
     def get_description_for_scan_types(self, scan_type):
         return "Import XML output of HCL AppScan."
 
-    def xmltreehelper(self, input):
-        if input.text is None:
+    def xmltreehelper(self, xml_input):
+        if xml_input.text is None:
             output = None
-        elif "\n" in input.text:
+        elif "\n" in xml_input.text:
             output = ""
-            for i in input:
+            for i in xml_input:
                 output = output + " " + i.text
         else:
-            output = " " + input.text
+            output = " " + xml_input.text
         return output
 
     def get_findings(self, file, test):
@@ -42,10 +42,7 @@ class HCLAppScanParser:
                     match item.tag:
                         case "severity":
                             output = self.xmltreehelper(item)
-                            if output is None:
-                                severity = "Info"
-                            else:
-                                severity = output.strip(" ").capitalize()
+                            severity = "Info" if output is None else output.strip(" ").capitalize()
                         case "cwe":
                             cwe = int(self.xmltreehelper(item))
                         case "remediation":

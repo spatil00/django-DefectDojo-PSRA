@@ -45,7 +45,7 @@ class HackerOneVulnerabilityDisclosureProgram:
             # Build the severity of the Dojo finding
             try:
                 severity = content["relationships"]["severity"]["data"]["attributes"]["rating"].capitalize()
-                if severity not in ["Low", "Medium", "High", "Critical"]:
+                if severity not in {"Low", "Medium", "High", "Critical"}:
                     severity = "Info"
             except Exception:
                 severity = "Info"
@@ -56,10 +56,7 @@ class HackerOneVulnerabilityDisclosureProgram:
             references += f"[{ref_link}]({ref_link})"
 
             # Set active state of the Dojo finding
-            if content["attributes"]["state"] in ["triaged", "new"]:
-                active = True
-            else:
-                active = False
+            active = content["attributes"]["state"] in {"triaged", "new"}
 
             # Set CWE of the Dojo finding
             try:
@@ -121,11 +118,8 @@ class HackerOneVulnerabilityDisclosureProgram:
             description += f"Triaged: {triaged_date}\n"
 
         # Try to grab CVSS
-        try:
-            cvss = content["relationships"]["severity"]["data"]["attributes"]["score"]
+        if cvss := content.get("relationships", {}).get("severity", {}).get("data", {}).get("attributes", {}).get("score"):
             description += f"CVSS: {cvss}\n"
-        except Exception:
-            pass
 
         # Build rest of description meat
         description += "##Report: \n{}\n".format(
@@ -133,12 +127,9 @@ class HackerOneVulnerabilityDisclosureProgram:
         )
 
         # Try to grab weakness if it's there
-        try:
-            weakness_title = content["relationships"]["weakness"]["data"]["attributes"]["name"]
-            weakness_desc = content["relationships"]["weakness"]["data"]["attributes"]["description"]
-            description += f"\n##Weakness: {weakness_title}\n{weakness_desc}"
-        except Exception:
-            pass
+        if weakness_title := content.get("relationships", {}).get("weakness", {}).get("data", {}).get("attributes", {}).get("name"):
+            if weakness_desc := content.get("relationships", {}).get("weakness", {}).get("data", {}).get("attributes", {}).get("description"):
+                description += f"\n##Weakness: {weakness_title}\n{weakness_desc}"
 
         return description
 
@@ -224,7 +215,7 @@ class HackerOneBugBountyProgram:
         """Convert the severity from the parser from the string value, or CVSS score."""
         # Try to use the string severity first
         if (severity := entry.get("severity_rating")) is not None:
-            if severity in ["critical", "high", "medium", "low"]:
+            if severity in {"critical", "high", "medium", "low"}:
                 return severity.capitalize()
         # Fall back to "severity_score" which I assume is CVSS Score
         if (severity_score := entry.get("severity_score")) is not None:

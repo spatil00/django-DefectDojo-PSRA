@@ -31,7 +31,7 @@ for approval, please file an issue to get pre-approval before beginning work on 
 `enhancement-approved` label to your issue and you can begin building it out.
 
 Below are some representative examples of what we will and won't support going forward. If you have suggestions or other
-feedback, please let us know in the `#defectdojo` channel in [OWASP's Slack](https://owasp-slack.herokuapp.com/).
+feedback, please let us know in the `#defectdojo` channel in [OWASP's Slack](https://owasp.org/slack/invite).
 
 **Acceptable examples:**
 
@@ -54,7 +54,7 @@ feedback, please let us know in the `#defectdojo` channel in [OWASP's Slack](htt
 
 ## Writing a New Parser
 
-Please see [the parser guide](https://documentation.defectdojo.com/contributing/how-to-write-a-parser/) for guidance on how to write a parser.
+Please see [the parser guide](https://docs.defectdojo.com/en/open_source/contributing/how-to-write-a-parser/) for guidance on how to write a parser.
 
 ## Modifying DefectDojo and Testing
 
@@ -65,6 +65,12 @@ For changes that require additional settings, you can now use local_settings.py 
 ## Python3 Version
 For compatibility reasons, the code in dev branch should be python3.11 compliant.
 
+## Database migrations
+When changes are made to the database model, a database migration is needed. This migration can be generated using something like
+`docker compose exec uwsgi bash -c "python manage.py makemigrations"`.
+This will result in a new file in the `dojo/db_migrations` folder that can be committed to `git`
+When making downstream database model changes in your fork of Defect Dojo please be aware of the risks of getting out of sync with our upstream migrations.
+It requiers proper knowledge of [Django Migrations](https://docs.djangoproject.com/en/5.0/topics/migrations/) to reconcile the migrations before you can upgrade to a newer version of Defect Dojo.
 
 ## Submitting Pull Requests
 

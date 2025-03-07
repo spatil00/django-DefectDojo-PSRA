@@ -50,7 +50,7 @@ def webhook_responser_handler(
 @require_POST
 def webhook(request, secret=None):
     """
-    for examples of incoming json, see the unit tests for the webhook:
+    For examples of incoming json, see the unit tests for the webhook:
         https://github.com/DefectDojo/django-DefectDojo/blob/master/unittests/test_jira_webhook.py
     or the officials docs (which are not always clear):
         https://developer.atlassian.com/server/jira/platform/webhooks/
@@ -86,7 +86,7 @@ def webhook(request, secret=None):
     try:
         parsed = json.loads(request.body.decode("utf-8"))
         # Check if the events supplied are supported
-        if parsed.get("webhookEvent") not in ["comment_created", "jira:issue_updated"]:
+        if parsed.get("webhookEvent") not in {"comment_created", "jira:issue_updated"}:
             return webhook_responser_handler("info", f"Unrecognized JIRA webhook event received: {parsed.get('webhookEvent')}")
 
         if parsed.get("webhookEvent") == "jira:issue_updated":
@@ -100,10 +100,10 @@ def webhook(request, secret=None):
             findings = None
             # Determine what type of object we will be working with
             if jissue.finding:
-                logging.debug(f"Received issue update for {jissue.jira_key} for finding {jissue.finding.id}")
+                logger.debug(f"Received issue update for {jissue.jira_key} for finding {jissue.finding.id}")
                 findings = [jissue.finding]
             elif jissue.finding_group:
-                logging.debug(f"Received issue update for {jissue.jira_key} for finding group {jissue.finding_group}")
+                logger.debug(f"Received issue update for {jissue.jira_key} for finding group {jissue.finding_group}")
                 findings = jissue.finding_group.findings.all()
             elif jissue.engagement:
                 return webhook_responser_handler("debug", "Update for engagement ignored")
@@ -168,7 +168,7 @@ def webhook(request, secret=None):
 
 def check_for_and_create_comment(parsed_json):
     """
-    example incoming requests from JIRA Server 8.14.0
+    Example incoming requests from JIRA Server 8.14.0
     {
     "timestamp":1610269967824,
     "webhookEvent":"comment_created",
@@ -228,7 +228,7 @@ def check_for_and_create_comment(parsed_json):
         jissue = JIRA_Issue.objects.get(jira_id=jid)
     except JIRA_Instance.DoesNotExist:
         return webhook_responser_handler("info", f"JIRA issue {jid} is not linked to a DefectDojo Finding")
-    logging.debug(f"Received issue comment for {jissue.jira_key}")
+    logger.debug(f"Received issue comment for {jissue.jira_key}")
     logger.debug("jissue: %s", vars(jissue))
 
     jira_usernames = JIRA_Instance.objects.values_list("username", flat=True)
@@ -316,8 +316,8 @@ class NewJiraView(View):
 
             try:
                 jira = jira_helper.get_jira_connection_raw(jira_server, jira_username, jira_password)
-            except Exception as e:
-                logger.exception(e)  # already logged in jira_helper
+            except Exception:
+                logger.exception("Unable to authenticate. Please check credentials.")  # already logged in jira_helper
                 messages.add_message(
                     request,
                     messages.ERROR,
@@ -337,24 +337,26 @@ class NewJiraView(View):
                         open_key = open_key or int(node["id"])
                     if node["to"]["statusCategory"]["name"] == "Done":
                         close_key = close_key or int(node["id"])
-            except Exception as e:
-                logger.exception(e)  # already logged in jira_helper
+            except Exception:
+                msg = "Unable to find Open/Close ID's (invalid issue key specified?). They will need to be found manually"
+                logger.exception(msg)  # already logged in jira_helper
                 messages.add_message(
                     request,
                     messages.ERROR,
-                    "Unable to find Open/Close ID's (invalid issue key specified?). They will need to be found manually",
+                    msg,
                     extra_tags="alert-danger")
                 fallback_form = self.get_fallback_form_class()(request.POST, instance=JIRA_Instance())
                 return render(request, self.get_fallback_template(), {"jform": fallback_form})
             # Get the epic id name
             try:
                 epic_name = get_custom_field(jira, "Epic Name")
-            except Exception as e:
-                logger.exception(e)  # already logged in jira_helper
+            except Exception:
+                msg = "Unable to find Epic Name. It will need to be found manually"
+                logger.exception(msg)  # already logged in jira_helper
                 messages.add_message(
                     request,
                     messages.ERROR,
-                    "Unable to find Epic Name. It will need to be found manually",
+                    msg,
                     extra_tags="alert-danger")
                 fallback_form = self.get_fallback_form_class()(request.POST, instance=JIRA_Instance())
                 return render(request, self.get_fallback_template(), {"jform": fallback_form})
@@ -552,7 +554,7 @@ class DeleteJiraView(View):
                         url=request.build_absolute_uri(reverse("jira")))
                     return HttpResponseRedirect(reverse("jira"))
                 except Exception as e:
-                    add_error_message_to_response(f"Unable to delete JIRA Instance, probably because it is used by JIRA Issues: {str(e)}")
+                    add_error_message_to_response(f"Unable to delete JIRA Instance, probably because it is used by JIRA Issues: {e}")
 
         rels = ["Previewing the relationships has been disabled.", ""]
         display_preview = get_setting("DELETE_PREVIEW")

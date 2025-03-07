@@ -66,10 +66,7 @@ class WapitiParser:
                 title = category + ": " + entry.findtext("info")
                 # get numerical severity.
                 num_severity = entry.findtext("level")
-                if num_severity in severity_mapping:
-                    severity = severity_mapping[num_severity]
-                else:
-                    severity = "Info"
+                severity = severity_mapping.get(num_severity, "Info")
 
                 finding = Finding(
                     title=title,
@@ -107,7 +104,7 @@ class WapitiParser:
     @staticmethod
     def get_cwe(val):
         # Match only the first CWE!
-        cweSearch = re.search("CWE-(\\d+)", val, re.IGNORECASE)
+        cweSearch = re.search(r"CWE-(\d+)", val, re.IGNORECASE)
         if cweSearch:
             return int(cweSearch.group(1))
         return None

@@ -45,7 +45,7 @@ class NumberValidator:
 
 class UppercaseValidator:
     def validate(self, password, user=None):
-        if not re.findall("[A-Z]", password) and get_system_setting("uppercase_character_required"):
+        if not re.findall(r"[A-Z]", password) and get_system_setting("uppercase_character_required"):
             raise ValidationError(
                 self.get_help_text(),
                 code="password_no_upper")
@@ -57,7 +57,7 @@ class UppercaseValidator:
 
 class LowercaseValidator:
     def validate(self, password, user=None):
-        if not re.findall("[a-z]", password) and get_system_setting("lowercase_character_required"):
+        if not re.findall(r"[a-z]", password) and get_system_setting("lowercase_character_required"):
             raise ValidationError(
                 self.get_help_text(),
                 code="password_no_lower")
@@ -77,8 +77,10 @@ class SymbolValidator:
         return
 
     def get_help_text(self):
-        return gettext("The password must contain at least 1 special character, "
-            + """()[]{}|`~!@#$%^&*_-+=;:'",<>./?.""")
+        return gettext(
+            "The password must contain at least 1 special character, "
+            """()[]{}|`~!@#$%^&*_-+=;:'",<>./?.""",
+        )
 
 
 class DojoCommonPasswordValidator(CommonPasswordValidator):

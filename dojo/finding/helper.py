@@ -4,6 +4,7 @@ from time import strftime
 from django.conf import settings
 from django.db.models.query_utils import Q
 from django.db.models.signals import post_delete, pre_delete
+from django.db.utils import IntegrityError
 from django.dispatch.dispatcher import receiver
 from django.utils import timezone
 from fieldsignals import pre_save_changed
@@ -169,21 +170,22 @@ def create_finding_group(finds, finding_group_name):
 
     finding_group = Finding_Group(test=finds[0].test)
     finding_group.creator = get_current_user()
-    finding_group.name = finding_group_name + finding_group_name_dummy
-    finding_group.save()
+
+    if finding_group_name:
+        finding_group.name = finding_group_name
+    elif finding_group.components:
+        finding_group.name = finding_group.components
+    try:
+        finding_group.save()
+    except IntegrityError as ie:
+        if "already exists" in str(ie):
+            finding_group.name = finding_group_name + finding_group_name_dummy
+            finding_group.save()
+        else:
+            raise
+
     available_findings = [find for find in finds if not find.finding_group_set.all()]
     finding_group.findings.set(available_findings)
-
-    # if user provided a name, we use that, else:
-    # if we have components, we may set a nice name but catch 'name already exist' exceptions
-    try:
-        if finding_group_name:
-            finding_group.name = finding_group_name
-        elif finding_group.components:
-            finding_group.name = finding_group.components
-        finding_group.save()
-    except:
-        pass
 
     added = len(available_findings)
     skipped = len(finds) - added
@@ -240,10 +242,9 @@ def update_finding_group(finding, finding_group):
                 finding.finding_group.findings.remove(finding)
             logger.debug("adding finding %d to finding_group %s", finding.id, finding_group)
             finding_group.findings.add(finding)
-    else:
-        if finding.finding_group:
-            logger.debug("removing finding %d from finding_group %s", finding.id, finding.finding_group)
-            finding.finding_group.findings.remove(finding)
+    elif finding.finding_group:
+        logger.debug("removing finding %d from finding_group %s", finding.id, finding.finding_group)
+        finding.finding_group.findings.remove(finding)
 
 
 def get_group_by_group_name(finding, finding_group_by_option):
@@ -307,11 +308,11 @@ def group_findings_by(finds, finding_group_by_option):
     return affected_groups, grouped, skipped, groups_created
 
 
-def add_findings_to_auto_group(name, findings, group_by, create_finding_groups_for_all_findings=True, **kwargs):
+def add_findings_to_auto_group(name, findings, group_by, *, create_finding_groups_for_all_findings=True, **kwargs):
     if name is not None and findings is not None and len(findings) > 0:
         creator = get_current_user()
         if not creator:
-            creator = kwargs.get("async_user", None)
+            creator = kwargs.get("async_user")
         test = findings[0].test
 
         if create_finding_groups_for_all_findings or len(findings) > 1:
@@ -352,8 +353,8 @@ def add_findings_to_auto_group(name, findings, group_by, create_finding_groups_f
 @dojo_async_task
 @app.task
 @dojo_model_from_id
-def post_process_finding_save(finding, dedupe_option=True, rules_option=True, product_grading_option=True,
-             issue_updater_option=True, push_to_jira=False, user=None, *args, **kwargs):
+def post_process_finding_save(finding, dedupe_option=True, rules_option=True, product_grading_option=True,  # noqa: FBT002
+             issue_updater_option=True, push_to_jira=False, user=None, *args, **kwargs):  # noqa: FBT002 - this is bit hard to fix nice have this universally fixed
 
     system_settings = System_Settings.objects.get()
 
@@ -453,7 +454,7 @@ def reset_duplicate_before_delete(dupe):
 
 
 def reset_duplicates_before_delete(qs):
-    mass_model_updater(Finding, qs, lambda f: reset_duplicate_before_delete(f), fields=["duplicate", "duplicate_finding"])
+    mass_model_updater(Finding, qs, reset_duplicate_before_delete, fields=["duplicate", "duplicate_finding"])
 
 
 def set_new_original(finding, new_original):
@@ -519,11 +520,9 @@ def prepare_duplicates_for_delete(test=None, engagement=None):
 
     # remove the link to the original from the duplicates inside the cluster so they can be safely deleted by the django framework
     total = len(originals)
-    i = 0
     # logger.debug('originals: %s', [original.id for original in originals])
-    for original in originals:
-        i += 1
-        logger.debug("%d/%d: preparing duplicate cluster for deletion of original: %d", i, total, original.id)
+    for i, original in enumerate(originals):
+        logger.debug("%d/%d: preparing duplicate cluster for deletion of original: %d", i + 1, total, original.id)
         cluster_inside = original.original_finding.all()
         if engagement:
             cluster_inside = cluster_inside.filter(test__engagement=engagement)

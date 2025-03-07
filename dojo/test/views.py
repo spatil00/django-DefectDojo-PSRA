@@ -173,7 +173,7 @@ class ViewTest(View):
     def get_form(self, request: HttpRequest, context: dict):
         return (
             self.get_typed_note_form(request, context)
-            if context.get("note_type_activation", 0)
+            if context.get("note_type_activation")
             else self.get_note_form(request)
         )
 
@@ -538,6 +538,7 @@ class AddFindingView(View):
             finding.reporter = request.user
             finding.numerical_severity = Finding.get_numerical_severity(finding.severity)
             finding.tags = context["form"].cleaned_data["tags"]
+            finding.unsaved_vulnerability_ids = context["form"].cleaned_data["vulnerability_ids"].split()
             finding.save()
             # Save and add new endpoints
             finding_helper.add_endpoints(finding, context["form"])
@@ -864,10 +865,7 @@ class ReImportScanResultsView(View):
         # by default we keep a trace of the scan_type used to create the test
         # if it's not here, we use the "name" of the test type
         # this feature exists to provide custom label for tests for some parsers
-        if test.scan_type:
-            scan_type = test.scan_type
-        else:
-            scan_type = test.test_type.name
+        scan_type = test.scan_type or test.test_type.name
         # Set the product tab
         product_tab = Product_Tab(test.engagement.product, title=_("Re-upload a %s") % scan_type, tab="engagements")
         product_tab.setEngagement(test.engagement)
@@ -1005,7 +1003,7 @@ class ReImportScanResultsView(View):
                 untouched_finding_count=untouched_finding_count,
             ))
         except Exception as e:
-            logger.exception(e)
+            logger.exception("An exception error occurred during the report import")
             return f"An exception error occurred during the report import: {e}"
         return None
 

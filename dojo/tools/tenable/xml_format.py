@@ -23,7 +23,7 @@ class TenableXMLParser:
         elif severity_id == 1:
             severity = "Low"
         # Ensure the severity is a valid choice. Fall back to info otherwise
-        if severity not in Finding.SEVERITIES.keys():
+        if severity not in Finding.SEVERITIES:
             severity = "Info"
         return severity
 
@@ -112,8 +112,8 @@ class TenableXMLParser:
                         item.find("plugin_output"),
                     )
                     if plugin_output_element_text is not None:
-                        plugin_output = f"Plugin Output: {ip}{str(f':{port}' if port is not None else '')}"
-                        plugin_output += f"\n```\n{str(plugin_output_element_text)}\n```\n\n"
+                        plugin_output = f"Plugin Output: {ip}{f':{port}' if port is not None else ''}"
+                        plugin_output += f"\n```\n{plugin_output_element_text}\n```\n\n"
                         description += plugin_output
 
                     # Determine the severity

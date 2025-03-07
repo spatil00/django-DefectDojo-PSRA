@@ -76,7 +76,7 @@ def view_finding_group(request, fgid):
                 jira_instance = jira_helper.get_jira_project(finding_group).jira_instance
                 jira_issue = jira_issue.removeprefix(jira_instance.url + "/browse/")
 
-                if finding_group.has_jira_issue and not jira_issue == jira_helper.get_jira_key(finding_group):
+                if finding_group.has_jira_issue and jira_issue != jira_helper.get_jira_key(finding_group):
                     jira_helper.unlink_jira(request, finding_group)
                     jira_helper.finding_group_link_jira(request, finding_group, jira_issue)
                 elif not finding_group.has_jira_issue:
@@ -153,8 +153,8 @@ def unlink_jira(request, fgid):
                 extra_tags="alert-success")
 
             return JsonResponse({"result": "OK"})
-        except Exception as e:
-            logger.exception(e)
+        except Exception:
+            logger.exception("Link to JIRA could not be deleted")
             messages.add_message(
                 request,
                 messages.ERROR,

@@ -20,7 +20,7 @@ class SonarQubeSoprasteriaHelper:
             return "Medium"
         if sev == "minor":
             return "Low"
-        if sev in ["high", "medium", "low"]:
+        if sev in {"high", "medium", "low"}:
             return sev.capitalize()
         return "Info"
 
@@ -41,7 +41,7 @@ class SonarQubeSoprasteriaHelper:
 
     def get_cwe(self, vuln_references):
         # Match only the first CWE!
-        cweSearch = re.search("CWE-([0-9]*)", vuln_references, re.IGNORECASE)
+        cweSearch = re.search(r"CWE-([0-9]*)", vuln_references, re.IGNORECASE)
         if cweSearch:
             return cweSearch.group(1)
         return 0
@@ -97,7 +97,7 @@ class SonarQubeSoprasteriaHelper:
             find = dupes[aggregateKeys]
             find.description = f"{find.description}\n{descriptionOneOccurence}"
             find.mitigation = f"{find.mitigation}\n______\n{vuln_mitigation}"
-            find.nb_occurences = find.nb_occurences + 1
+            find.nb_occurences += 1
 
     # Process one vuln from the report for "SonarQube Scan detailed"
     # Create the finding and add it into the dupes list

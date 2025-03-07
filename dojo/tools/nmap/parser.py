@@ -1,3 +1,4 @@
+import contextlib
 import datetime
 
 from cpe import CPE
@@ -25,12 +26,10 @@ class NmapParser:
             raise ValueError(msg)
 
         report_date = None
-        try:
+        with contextlib.suppress(ValueError):
             report_date = datetime.datetime.fromtimestamp(
                 int(root.attrib["start"]),
             )
-        except ValueError:
-            pass
 
         for host in root.findall("host"):
             host_info = "### Host\n\n"
@@ -74,7 +73,7 @@ class NmapParser:
                     endpoint.port = int(port_element.attrib["portid"])
 
                 # filter on open ports
-                if "open" != port_element.find("state").attrib.get("state"):
+                if port_element.find("state").attrib.get("state") != "open":
                     continue
                 title = f"Open port: {endpoint.port}/{endpoint.protocol}"
                 description = host_info
@@ -97,6 +96,7 @@ class NmapParser:
                             "**Extra Info:** {}\n".format(port_element.find("service").attrib["extrainfo"])
                         )
                     description += service_info
+                script_id = None
                 if script := port_element.find("script"):
                     if script_id := script.attrib.get("id"):
                         description += f"**Script ID:** {script_id}\n"
@@ -127,6 +127,7 @@ class NmapParser:
                         severity=severity,
                         mitigation="N/A",
                         impact="No impact provided",
+                        vuln_id_from_tool=script_id,
                     )
                     find.unsaved_endpoints = []
                     dupes[dupe_key] = find
@@ -200,7 +201,7 @@ class NmapParser:
                 # manage if CVE is in metadata
                 if (
                     "type" in vuln_attributes
-                    and "cve" == vuln_attributes["type"]
+                    and vuln_attributes["type"] == "cve"
                 ):
                     finding.unsaved_vulnerability_ids = [vuln_attributes["id"]]
 

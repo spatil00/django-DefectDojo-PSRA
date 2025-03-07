@@ -1,5 +1,6 @@
 import logging
 import re
+from contextlib import suppress
 from threading import local
 from urllib.parse import quote
 
@@ -56,13 +57,10 @@ class LoginRequiredMiddleware:
 
         if request.user.is_authenticated:
             logger.debug("Authenticated user: %s", str(request.user))
-            try:
+            with suppress(ModuleNotFoundError):  # to avoid unittests to fail
                 uwsgi = __import__("uwsgi", globals(), locals(), ["set_logvar"], 0)
                 # this populates dd_user log var, so can appear in the uwsgi logs
                 uwsgi.set_logvar("dd_user", str(request.user))
-            except:
-                # to avoid unittests to fail
-                pass
             path = request.path_info.lstrip("/")
             from dojo.models import Dojo_User
             if Dojo_User.force_password_reset(request.user) and path != "change_password":
@@ -123,7 +121,7 @@ class System_Settings_Manager(models.Manager):
             return System_Settings()
         return from_db
 
-    def get(self, no_cache=False, *args, **kwargs):
+    def get(self, no_cache=False, *args, **kwargs):  # noqa: FBT002 - this is bit hard to fix nice have this universally fixed
         if no_cache:
             # logger.debug('no_cache specified or cached value found, loading system settings from db')
             return self.get_from_db(*args, **kwargs)

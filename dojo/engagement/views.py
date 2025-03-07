@@ -29,7 +29,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 import dojo.jira_link.helper as jira_helper
-import dojo.notifications.helper as notifications_helper
 import dojo.risk_acceptance.helper as ra_helper
 import dojo.risk_assessment.helper as rassess_helper
 from dojo.authorization.authorization import user_has_permission_or_403
@@ -151,7 +150,7 @@ def engagement_calendar(request):
 
 def get_filtered_engagements(request, view):
 
-    if view not in ["all", "active"]:
+    if view not in {"all", "active"}:
         msg = f"View {view} is not allowed"
         raise ValidationError(msg)
 
@@ -320,10 +319,7 @@ def edit_engagement(request, eid):
             logger.debug("showing jira-epic-form")
             jira_epic_form = JIRAEngagementForm(instance=engagement)
 
-    if is_ci_cd:
-        title = "Edit CI/CD Engagement"
-    else:
-        title = "Edit Interactive Engagement"
+    title = "Edit CI/CD Engagement" if is_ci_cd else "Edit Interactive Engagement"
 
     product_tab = Product_Tab(engagement.product, title=title, tab="engagements")
     product_tab.setEngagement(engagement)
@@ -469,10 +465,7 @@ class ViewEngagement(View):
             available_note_types = find_available_notetypes(notes)
         form = DoneForm()
         files = eng.files.all()
-        if note_type_activation:
-            form = TypedNoteForm(available_note_types=available_note_types)
-        else:
-            form = NoteForm()
+        form = TypedNoteForm(available_note_types=available_note_types) if note_type_activation else NoteForm()
 
         creds = Cred_Mapping.objects.filter(
             product=eng.product).select_related("cred_id").order_by("cred_id")
@@ -555,10 +548,7 @@ class ViewEngagement(View):
             new_note.date = timezone.now()
             new_note.save()
             eng.notes.add(new_note)
-            if note_type_activation:
-                form = TypedNoteForm(available_note_types=available_note_types)
-            else:
-                form = NoteForm()
+            form = TypedNoteForm(available_note_types=available_note_types) if note_type_activation else NoteForm()
             title = f"Engagement: {eng.name} on {eng.product.name}"
             messages.add_message(request,
                                  messages.SUCCESS,
@@ -666,7 +656,15 @@ def add_tests(request, eid):
                 "Test added successfully.",
                 extra_tags="alert-success")
 
-            notifications_helper.notify_test_created(new_test)
+            create_notification(
+                event="test_added",
+                title=f"Test created for {new_test.engagement.product}: {new_test.engagement.name}: {new_test}",
+                test=new_test,
+                engagement=new_test.engagement,
+                product=new_test.engagement.product,
+                url=reverse("view_test", args=(new_test.id,)),
+                url_api=reverse("test-detail", args=(new_test.id,)),
+            )
 
             if "_Add Another Test" in request.POST:
                 return HttpResponseRedirect(
@@ -934,7 +932,7 @@ class ImportScanResultsView(View):
                 closed_finding_count=closed_finding_count,
             ))
         except Exception as e:
-            logger.exception(e)
+            logger.exception("An exception error occurred during the report import")
             return f"An exception error occurred during the report import: {e}"
         return None
 
@@ -1378,10 +1376,10 @@ def add_risk_acceptance(request, eid, fid=None):
                 # we sometimes see a weird exception here, but are unable to reproduce.
                 # we add some logging in case it happens
                 risk_acceptance = form.save()
-            except Exception as e:
+            except Exception:
                 logger.debug(vars(request.POST))
                 logger.error(vars(form))
-                logger.exception(e)
+                logger.exception("Creation of Risk Acc. is not possible")
                 raise
 
             # attach note to risk acceptance object now in database
@@ -1431,7 +1429,7 @@ def edit_risk_acceptance(request, eid, raid):
 
 
 # will only be called by view_risk_acceptance and edit_risk_acceptance
-def view_edit_risk_acceptance(request, eid, raid, edit_mode=False):
+def view_edit_risk_acceptance(request, eid, raid, *, edit_mode=False):
     risk_acceptance = get_object_or_404(Risk_Acceptance, pk=raid)
     eng = get_object_or_404(Engagement, pk=eid)
 
@@ -1545,9 +1543,8 @@ def view_edit_risk_acceptance(request, eid, raid, edit_mode=False):
             return redirect_to_return_url_or_else(request, reverse("view_risk_acceptance", args=(eid, raid)))
         logger.error("errors found")
 
-    else:
-        if edit_mode:
-            risk_acceptance_form = EditRiskAcceptanceForm(instance=risk_acceptance)
+    elif edit_mode:
+        risk_acceptance_form = EditRiskAcceptanceForm(instance=risk_acceptance)
 
     note_form = NoteForm()
     replace_form = ReplaceRiskAcceptanceProofForm(instance=risk_acceptance)
@@ -1716,9 +1713,9 @@ def engagement_ics(request, eid):
     return response
 
 
-def get_list_index(list, index):
+def get_list_index(full_list, index):
     try:
-        element = list[index]
+        element = full_list[index]
     except Exception:
         element = None
     return element
@@ -1738,7 +1735,7 @@ def get_engagements(request):
         raise ValidationError(msg)
 
     view = query = None
-    if get_list_index(path_items, 1) in ["active", "all"]:
+    if get_list_index(path_items, 1) in {"active", "all"}:
         view = get_list_index(path_items, 1)
         query = get_list_index(path_items, 2)
     else:
@@ -1762,6 +1759,7 @@ def get_foreign_keys():
 
 
 def csv_export(request):
+    logger.debug("starting csv export")
     engagements, test_counts = get_engagements(request)
 
     response = HttpResponse(content_type="text/csv")
@@ -1794,11 +1792,12 @@ def csv_export(request):
             fields.append(test_counts.get(engagement.id, 0))
 
             writer.writerow(fields)
-
+    logger.debug("done with csv export")
     return response
 
 
 def excel_export(request):
+    logger.debug("starting excel export")
     engagements, test_counts = get_engagements(request)
 
     workbook = Workbook()
@@ -1844,6 +1843,7 @@ def excel_export(request):
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     response["Content-Disposition"] = "attachment; filename=engagements.xlsx"
+    logger.debug("done with excel export")
     return response
 
 def psra_excel_report():

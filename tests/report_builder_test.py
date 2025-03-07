@@ -1,4 +1,3 @@
-import os
 import sys
 import unittest
 
@@ -8,8 +7,6 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
-
-dir_path = os.path.dirname(os.path.realpath(__file__))
 
 
 class ReportBuilderTest(BaseTestCase):

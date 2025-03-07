@@ -33,22 +33,22 @@ class SonarQubeApiImporter:
 
     @staticmethod
     def is_confirmed(state):
-        return state.lower() in [
+        return state.lower() in {
             "confirmed",
             "accepted",
             "detected",
-        ]
+        }
 
     @staticmethod
     def is_closed(state):
-        return state.lower() in [
+        return state.lower() in {
             "resolved",
             "falsepositive",
             "wontfix",
             "closed",
             "dismissed",
             "rejected",
-        ]
+        }
 
     @staticmethod
     def is_reviewed(state):
@@ -128,7 +128,7 @@ class SonarQubeApiImporter:
                 organization=organization,
                 branch=test.branch_tag,
             )
-            logging.info(
+            logger.info(
                 f'Found {len(issues)} issues for component {component["key"]}',
             )
 
@@ -142,10 +142,7 @@ class SonarQubeApiImporter:
                     continue
 
                 issue_type = issue["type"]
-                if len(issue["message"]) > 511:
-                    title = issue["message"][0:507] + "..."
-                else:
-                    title = issue["message"]
+                title = issue["message"][0:507] + "..." if len(issue["message"]) > 511 else issue["message"]
                 component_key = issue["component"]
                 line = issue.get("line")
                 rule_id = issue["rule"]
@@ -206,7 +203,7 @@ class SonarQubeApiImporter:
                 items.append(find)
 
         except Exception as e:
-            logger.exception(e)
+            logger.exception("SonarQube API import issue")
             create_notification(
                 event="sonarqube_failed",
                 title="SonarQube API import issue",
@@ -247,7 +244,7 @@ class SonarQubeApiImporter:
                 organization=organization,
                 branch=test.branch_tag,
             )
-            logging.info(
+            logger.info(
                 f'Found {len(hotspots)} hotspots for project {component["key"]}',
             )
             sonarUrl = client.sonar_api_url[:-3]  # [:-3] removes the /api part of the sonarqube/cloud URL
@@ -326,10 +323,8 @@ class SonarQubeApiImporter:
                 )
                 items.append(find)
 
-            return items
-
         except Exception as e:
-            logger.exception(e)
+            logger.exception("SonarQube API import issue")
             create_notification(
                 event="sonarqube_failed",
                 title="SonarQube API import issue",
@@ -338,6 +333,8 @@ class SonarQubeApiImporter:
                 source="SonarQube API",
                 obj=test.engagement.product,
             )
+
+        return items
 
     @staticmethod
     def clean_rule_description_html(raw_html):
