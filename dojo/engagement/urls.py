@@ -66,4 +66,6 @@ urlpatterns = [
         views.csv_export, name="engagement_csv_export"),
     re_path(r"^engagement/excel_export$",
         views.excel_export, name="engagement_excel_export"),
+    re_path(r"^engagement/psra_excel_export$",
+        views.psra_excel_report, name="engagement_psra_excel_export"),
 ]

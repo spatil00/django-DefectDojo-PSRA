@@ -579,6 +579,27 @@ class ImportScanForm(forms.Form):
 
         self.endpoints_to_add_list = []
 
+    def save_uploaded_file(self, file):
+        # Define the base directory where files will be saved
+        # You can customize this path as needed
+        base_upload_dir = os.path.join(settings.BASE_DIR, 'uploads', 'scan_reports')
+        
+        # Create the directory if it doesn't exist
+        os.makedirs(base_upload_dir, exist_ok=True)
+        
+        # Generate a unique filename (you might want to add more sophisticated naming)
+        filename = f"{timezone.now().strftime('%Y%m%d_%H%M%S')}_{file.name}"
+        
+        # Full path for the file
+        file_path = os.path.join(base_upload_dir, filename)
+        
+        # Save the file
+        with open(file_path, 'wb+') as destination:
+            for chunk in file.chunks():
+                destination.write(chunk)
+        
+        return file_path
+
     def clean(self):
         cleaned_data = super().clean()
         scan_type = cleaned_data.get("scan_type")
@@ -600,6 +621,15 @@ class ImportScanForm(forms.Form):
         if errors:
             raise forms.ValidationError(errors)
         self.endpoints_to_add_list = endpoints_to_add_list
+
+        # if file:
+        #     # Optional: Add additional file handling or validation
+        #     try:
+        #         saved_file_path = self.save_uploaded_file(file)
+        #         # You can store the path in the cleaned_data if needed
+        #         cleaned_data['saved_file_path'] = saved_file_path
+        #     except Exception as e:
+        #         raise forms.ValidationError(f"Error saving file: {str(e)}")
 
         return cleaned_data
 
@@ -869,6 +899,9 @@ class RiskAssessmentForm(EditRiskAssessmentForm):
         model = Risk_Assessment
         fields = ['name', 'finding_description', 'vulnerability_cause','assessed_findings',
                   'vector_string','threat_types', 'threat_description','risk_statement','finding_mitigation','mitigation_types','mitigation_reference','accept_risk','rational_and_actions', 'related_hazard_item']
+        widgets = {
+            'vector_string': forms.HiddenInput(),
+        }
 
     def save(self, commit=True):
         instance = super().save(commit=False)

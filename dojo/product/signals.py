@@ -9,6 +9,8 @@ from django.utils.translation import gettext as _
 from dojo.models import Product
 from dojo.notifications.helper import create_notification
 
+from dojo.models import Engagement, Test, Test_Type
+
 
 @receiver(post_save, sender=Product)
 def product_post_save(sender, instance, created, **kwargs):
@@ -38,3 +40,44 @@ def product_post_delete(sender, instance, **kwargs):
                         description=description,
                         url=reverse("product"),
                         icon="exclamation-triangle")
+
+# @receiver(post_save, sender=Engagement)
+# def create_default_scan_for_engagement(sender, instance, created, **kwargs):
+#     """
+#     Signal handler to automatically create a default scan/test
+#     whenever a new engagement is created
+#     """
+#     print("HELLO SIGNAL 1")
+#     print(type(instance))
+#     print("INSTANCE ", instance.product.prod_type)
+
+#     if created:  # Only run when the engagement is first created
+#         try:
+#             engagement_count = Engagement.objects.filter(product=instance.product).count()
+
+#             if engagement_count == 1:
+#                 default_test_type = Test_Type.objects.get(name="Philips RMM Scan")
+#                 print("HELLO SIGNAL 2")
+#                 print("DEFAULT TEST TYPE", default_test_type)
+                
+#                 test = Test(
+#                     engagement=instance,
+#                     test_type=default_test_type,
+#                     target_start=instance.target_start,
+#                     target_end=instance.target_end,
+#                 )
+#                 test.save()
+
+#                 import logging
+#                 logger = logging.getLogger(__name__)
+#                 logger.debug(f"Default scan created for engagement {instance.id}")
+            
+#         except Test_Type.DoesNotExist:
+#             import logging
+#             logger = logging.getLogger(__name__)
+#             logger.error("Default test type not found - could not create default scan")
+#         except Exception as e:
+#             # Catch any other exceptions
+#             import logging
+#             logger = logging.getLogger(__name__)
+#             logger.error(f"Error creating default scan: {str(e)}")

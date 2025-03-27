@@ -86,7 +86,7 @@ class DefaultImporter(BaseImporter, DefaultImporterOptions):
         scan: TemporaryUploadedFile,
         *args: list,
         **kwargs: dict,
-    ) -> tuple[Test, int, int, int, int, int, Test_Import]:
+    ) -> tuple[Test, int, int, int, int, int, Test_Import]: # tuple[Test, int, int, int, int, int, Test_Import, list]:
         """
         The full step process of taking a scan report, and converting it to
         findings in the database. This entails the the following actions:
@@ -97,6 +97,7 @@ class DefaultImporter(BaseImporter, DefaultImporterOptions):
         - Update/Create import history objects
         - Send out notifications
         - Update the test progress
+        # - Findings
         """
         logger.debug(f"IMPORT_SCAN: parameters: {locals()}")
         # Validate the Tool_Configuration
@@ -147,7 +148,7 @@ class DefaultImporter(BaseImporter, DefaultImporterOptions):
         logger.debug("IMPORT_SCAN: Updating Test progress")
         self.update_test_progress()
         logger.debug("IMPORT_SCAN: Done")
-        return self.test, 0, len(new_findings), len(closed_findings), 0, 0, test_import_history
+        return self.test, 0, len(new_findings), len(closed_findings), 0, 0, test_import_history # new_findings
 
     def process_findings(
         self,
@@ -335,6 +336,7 @@ class DefaultImporter(BaseImporter, DefaultImporterOptions):
                 self.parsed_findings = self.parse_findings_dynamic_test_type(scan, parser)
             else:
                 self.parsed_findings = self.parse_findings_static_test_type(scan, parser)
+                print("PARSED: ", self.parsed_findings)
         return self.parsed_findings
 
     def parse_findings_static_test_type(

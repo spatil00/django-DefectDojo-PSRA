@@ -1,3 +1,6 @@
+import os
+import environ
+import shutil
 import csv
 import logging
 import re
@@ -16,7 +19,7 @@ from openpyxl import Workbook,load_workbook
 from openpyxl.styles import Font
 import warnings
 
-
+from urllib.parse import urlparse, parse_qs
 
 from dojo.authorization.authorization import user_has_permission_or_403
 from dojo.authorization.authorization_decorators import user_is_authorized
@@ -1126,6 +1129,13 @@ class PSRAExcelExportView(View):
         "PV": "BY",  # Privacy Violation
     }
 
+    def get_product(self, product_id: int):
+        return get_object_or_404(Product, id=product_id)
+
+    def get_test(self, test_id: int):
+        return get_object_or_404(Test, id=test_id)
+    
+
     def initialize_factors_with_dash(self, worksheet, row):
         """Initialize cells corresponding to factors in factors_to_mark_with_x with '-'."""
         for factor in self.factors_to_mark_with_x:
@@ -1198,74 +1208,122 @@ class PSRAExcelExportView(View):
                 rmm_worksheet[f"{threat_mapping[threat]}{idx}"] = 'X'
 
 
-    def get(self, request):
+    def get(self, request, test_id=None):
         warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.worksheet._reader")
         warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.reader.workbook")
-        
-        template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
-        workbook = load_workbook(template_path,data_only=False)
-        
+
+        raw_url = request.GET.get("url", "")
+        product_id = request.GET.get("product_id")  # to check if product_id is explicitly passed
+
+        try:
+            url_parts = raw_url.split('?')
+            base_path = url_parts[0]
+
+            if not product_id:
+                match = re.search(r'/product/(\d+)/', base_path)
+                if match:
+                    product_id = match.group(1)
+
+            if product_id:
+                product_id = int(product_id)
+            else:
+                return HttpResponse("Error: Cannot determine product ID", status=400)
+
+            product = self.get_product(product_id)
+
+            if len(url_parts) > 1:
+                additional_params = parse_qs(url_parts[1])
+
+                get_copy = request.GET.copy()
+                for key, value in additional_params.items():
+                    get_copy[key] = value[0] if len(value) == 1 else value
+
+                request.GET = get_copy
+
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error parsing URL: {raw_url}. Error: {str(e)}")
+            return HttpResponse(f"Invalid URL: {raw_url}", status=400)
+
+        pid = product.id
+        root_path = environ.Path(__file__) - 3  # Three folders back 
+        product_folder = f"product_{pid}"
+        base_upload_dir = root_path('uploads', 'scan_reports', product_folder)
+
+        os.makedirs(base_upload_dir, exist_ok=True)
+        existing_file_path = os.path.join(base_upload_dir, f"RiskAssessment_{pid}.xlsx")
+
+        if not os.path.exists(existing_file_path):
+            template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
+            shutil.copy(template_path, existing_file_path)
+
+        workbook = load_workbook(existing_file_path, data_only=False)
         rmm_worksheet = workbook["RMM"]
         mitigation_worksheet = workbook["Mitigations"]
+
+        self.clear_existing_data(rmm_worksheet, mitigation_worksheet)
 
         findings, _obj = get_findings(request)
         self.findings = findings
         findings = self.add_findings_data()
 
-        start_row = 4  # Starting row for data in Excel
+        start_row = 4
         for idx, finding in enumerate(findings, start=start_row):
             risk_assessment = Risk_Assessment.objects.filter(assessed_findings=finding).first()
-            
             if risk_assessment is None: 
                 continue
             
             vector_string = risk_assessment.vector_string
             if not vector_string:
                 continue
-            
+
             vulnerability_description = finding.title
             threat_description = risk_assessment.threat_description
             risk_statement = risk_assessment.risk_statement
             hazard_statement = risk_assessment.related_hazard_item
             vulnerability_cause = risk_assessment.vulnerability_cause
             threat_types = risk_assessment.threat_types
-            rationale_and_actions= risk_assessment.rational_and_actions
+            rationale_and_actions = risk_assessment.rational_and_actions
             accepted_risk = finding.risk_accepted
-            mitigation_type  = risk_assessment.mitigation_types
+            mitigation_type = risk_assessment.mitigation_types
             mitigation_reference = risk_assessment.mitigation_reference
             
             self.set_threat_type(rmm_worksheet, idx, threat_types)
-
-            # Initialize cells with '-' for factors in factors_to_mark_with_x
             self.initialize_factors_with_dash(rmm_worksheet, idx)
-
             factor_values = self.parse_vector_string(vector_string)
             self.fill_finding_row(rmm_worksheet, factor_values, idx)
 
-            # Set the additional values in specified columns
             rmm_worksheet[f"B{idx}"] = "V"+str(finding.id)
-            rmm_worksheet[f"C{idx}"] = vulnerability_description  # Vulnerability Description in column "C"
-            rmm_worksheet[f"K{idx}"] = threat_description         # Threat Description in column "K"
-            rmm_worksheet[f"L{idx}"] = risk_statement             # Risk Statement in column "L"
+            rmm_worksheet[f"C{idx}"] = vulnerability_description
+            rmm_worksheet[f"K{idx}"] = threat_description
+            rmm_worksheet[f"L{idx}"] = risk_statement
             rmm_worksheet[f"CF{idx}"] = hazard_statement
             rmm_worksheet[f"D{idx}"] = vulnerability_cause
             rmm_worksheet[f"CE{idx}"] = rationale_and_actions
+            rmm_worksheet[f"CD{idx}"] = "Yes" if accepted_risk else "No"
 
-            if accepted_risk:
-                rmm_worksheet[f"CD{idx}"] = "Yes"
-            else:
-                rmm_worksheet[f"CD{idx}"] = "No"
+            mitigation_worksheet[f"A{idx-2}"] = "M"+str(finding.id)
+            mitigation_worksheet[f"B{idx-2}"] = finding.mitigation
+            mitigation_worksheet[f"C{idx-2}"] = mitigation_type
+            mitigation_worksheet[f"D{idx-2}"] = mitigation_reference
+            rmm_worksheet[f"BI{idx}"] = "M"+str(finding.id)
 
-            mitigation_worksheet[f"A{idx-2}"] = "M"+str(finding.id)  # Mitigations start from row 2
-            mitigation_worksheet[f"B{idx-2}"] = finding.mitigation  # Mitigation in column "B"
-            mitigation_worksheet[f"C{idx-2}"] = mitigation_type  # Mitigation Type in column "C"
-            mitigation_worksheet[f"D{idx-2}"] = mitigation_reference  # Mitigation Reference in column "D"
+        workbook.save(existing_file_path)
 
-            rmm_worksheet[f"BI{idx}"] = "M"+str(finding.id) # set Mitigation ID in column "BI"
-
-        
-        response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        response["Content-Disposition"] = 'attachment; filename="RiskAssessment.xlsx"'
-        workbook.save(response)
+        with open(existing_file_path, 'rb') as file:
+            response = HttpResponse(
+                file.read(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            response['Content-Disposition'] = f'attachment; filename="RiskAssessment_{pid}.xlsx"'
         
         return response
+
+
+    def clear_existing_data(self, rmm_worksheet, mitigation_worksheet):
+        for row in range(4, rmm_worksheet.max_row + 1):
+            for col in range(1, rmm_worksheet.max_column + 1):
+                rmm_worksheet.cell(row=row, column=col).value = None
+        
+        for row in range(2, mitigation_worksheet.max_row + 1):
+            for col in range(1, mitigation_worksheet.max_column + 1):
+                mitigation_worksheet.cell(row=row, column=col).value = None

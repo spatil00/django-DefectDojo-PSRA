@@ -3,6 +3,7 @@
 
 # this example configures the django debug toolbar and sets some loglevels to DEBUG
 
+import os
 from django.urls import re_path
 from django.conf.urls import include
 
@@ -56,6 +57,13 @@ DEBUG_TOOLBAR_PANELS = [
     'debug_toolbar.panels.profiling.ProfilingPanel',
     # 'cachalot.panels.CachalotPanel',
 ]
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+SCAN_REPORTS_DIR = os.path.join(BASE_DIR, 'uploads', 'scan_reports')
+
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440  # 2.5 MB
+FILE_UPLOAD_TEMP_DIR = os.path.join(BASE_DIR, 'tmp')
 
 import debug_toolbar
 EXTRA_URL_PATTERNS = [re_path(r"^__debug__/", include(debug_toolbar.urls))]

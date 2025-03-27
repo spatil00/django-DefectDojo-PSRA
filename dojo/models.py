@@ -1,3 +1,4 @@
+import os
 import base64
 import copy
 import hashlib
@@ -1338,6 +1339,20 @@ class Product_Type_Group(models.Model):
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
 
 
+class Product_File_Path(models.Model):
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="file_paths"
+    )
+    product_file_path = models.CharField(max_length=1000)
+
+    def delete(self, *args, **kwargs):
+        if os.path.exists(self.product_file_path):
+            os.remove(self.product_file_path)
+        super().delete(*args, **kwargs)  
+
+
 class Tool_Type(models.Model):
     name = models.CharField(max_length=200)
     description = models.CharField(max_length=2000, null=True, blank=True)
@@ -2622,7 +2637,7 @@ class Finding(models.Model):
 
     tags = TagField(blank=True, force_lowercase=True, help_text=_("Add tags that help describe this finding. Choose from the list or add new tags. Press Enter key to add."))
     inherited_tags = TagField(blank=True, force_lowercase=True, help_text=_("Internal use tags sepcifically for maintaining parity with product. This field will be present as a subset in the tags field"))
-
+    
     SEVERITIES = {"Info": 4, "Low": 3, "Medium": 2,
                   "High": 1, "Critical": 0}
 
@@ -2672,6 +2687,7 @@ class Finding(models.Model):
         self.unsaved_tags = None
         self.unsaved_files = None
         self.unsaved_vulnerability_ids = None
+        
 
     def __str__(self):
         return self.title
@@ -2784,6 +2800,10 @@ class Finding(models.Model):
         logger.debug("%d finding delete", self.id)
         from dojo.finding import helper
         helper.finding_delete(self)
+
+        # if self.risk and not self.risk.assessed_findings.exists():
+        #     self.risk.delete()
+        
         super().delete(*args, **kwargs)
         with suppress(Test.DoesNotExist, Engagement.DoesNotExist, Product.DoesNotExist):
             # Suppressing a potential issue created from async delete removing
@@ -3400,6 +3420,12 @@ class Finding(models.Model):
                 deduplicationLogger.debug("Hash_code computed for finding: %s", self.hash_code)
 
 
+class VulnerabilityFinding(Finding):
+        def __init__(self, test=None, vulnerability=None):
+            super().__init__(test=test)
+            self.vulnerability = vulnerability
+
+
 class FindingAdmin(admin.ModelAdmin):
     # For efficiency with large databases, display many-to-many fields with raw
     # IDs rather than multi-select
@@ -3675,7 +3701,7 @@ class Risk_Assessment(models.Model):
         ("N", "N - No Mitigation (Risk Accepted)"),
     ]
 
-    threat_types = MultiSelectField(choices=THREAT_TYPE_CHOICES, max_length=20)
+    threat_types = MultiSelectField(choices=THREAT_TYPE_CHOICES, max_length=5000, blank=True, null=True)
     mitigation_types = models.CharField(choices=MITIGATION_TYPE_CHOICES, max_length=1, default="D")
     name = models.CharField(max_length=300, null=False, blank=False)
     assessed_findings = models.ManyToManyField("dojo.Finding", related_name="risk_assessments")
@@ -4741,6 +4767,7 @@ admin.site.register(Language_Type)
 admin.site.register(App_Analysis)
 admin.site.register(Test)
 admin.site.register(Finding, FindingAdmin)
+admin.site.register(VulnerabilityFinding)
 admin.site.register(FileUpload)
 admin.site.register(FileAccessToken)
 admin.site.register(Stub_Finding)

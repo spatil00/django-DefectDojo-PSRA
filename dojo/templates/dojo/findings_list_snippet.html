@@ -38,11 +38,13 @@
                                         <i class="fa-solid fa-file-excel"></i> {% trans "Excel Export" %}
                                     </a>
                                 </li>
-                                <li role="presentation">
+                                {% if request.path|slice:":9" == "/product/" %}
+                                <li>
                                     <a id="psra_excel_export" href="{% url 'psra_excel_export' %}?url={{ request.get_full_path }}">
-                                        <i class="fa fa-file-spreadsheet"></i> {% trans "PSRA Excel Export" %}
+                                        <i class="fa-solid fa-file-excel"></i> {% trans "PSRA Excel Export" %}
                                     </a>
                                 </li>
+                                {% endif %}
                             </ul>
                             <button id="show-filters"
                                     data-toggle="collapse"

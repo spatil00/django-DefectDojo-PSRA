@@ -142,15 +142,47 @@ class ViewTest(View):
 
     def get_findings(self, request: HttpRequest, test: Test):
         findings = Finding.objects.filter(test=test).order_by("numerical_severity")
+
         filter_string_matching = get_system_setting("filter_string_matching", False)
         finding_filter_class = FindingFilterWithoutObjectLookups if filter_string_matching else FindingFilter
         findings = finding_filter_class(request.GET, queryset=findings)
         paged_findings = get_page_items_and_count(request, prefetch_for_findings(findings.qs), 25, prefix="findings")
 
+        # for finding in findings.qs:
+        #     print(f"Finding: {finding}")
+
+        #     if finding.risk:
+        #         risk = finding.risk
+        #         print("---- Risk Assessment ----")
+        #         print(f"Name: {risk.name}")
+        #         print(f"Threat Types: {risk.threat_types}")
+        #         print(f"Mitigation Type: {risk.mitigation_types}")
+        #         print(f"Vector String: {risk.vector_string}")
+        #         print(f"Vulnerability Cause: {risk.vulnerability_cause}")
+        #         print(f"Threat Description: {risk.threat_description}")
+        #         print(f"Risk Statement: {risk.risk_statement}")
+        #         print(f"Related Hazard Item: {risk.related_hazard_item}")
+        #         print(f"Rationale and Actions: {risk.rational_and_actions}")
+        #         print(f"Mitigation Reference: {risk.mitigation_reference}")
+        #         print(f"Finding Mitigation: {risk.finding_mitigation}")
+        #         print(f"Accept Risk: {risk.accept_risk}")
+        #         print("------------------------")
+        #     else:
+        #         print("No risk assessment information available.")
+
+        # for finding in findings.qs:
+        #     if finding.risk:
+        #         risk = finding.risk
+        #         risk.vector_string
+        #         finding.vector_string = finding.risk.vector_string
+        #     else:
+        #         finding.vector_string = ''  
+
         return {
             "findings": paged_findings,
             "filtered": findings,
         }
+
 
     def get_note_form(self, request: HttpRequest):
         # Set up the args for the form
@@ -644,6 +676,7 @@ class AddFindingView(View):
         return finding, request, all_forms_valid
 
     def get_template(self):
+        print("HERE AT TEMPLATE GET FUNCTION OF ADD FINDINGS")
         return "dojo/add_findings.html"
 
     def get(self, request: HttpRequest, test_id: int):
@@ -669,6 +702,7 @@ class AddFindingView(View):
         if success:
             if "_Finished" in request.POST:
                 return HttpResponseRedirect(reverse("view_test", args=(test.id,)))
+            print("1111111111111111111111111111111")
             return HttpResponseRedirect(reverse("add_findings", args=(test.id,)))
         context["form_error"] = True
         # Render the form
@@ -684,6 +718,7 @@ def add_temp_finding(request, tid, fid):
     push_all_jira_issues = jira_helper.is_push_all_issues(finding)
 
     if request.method == "POST":
+        print("HERE AT ADD FINDINGS")
 
         form = AddFindingForm(request.POST, req_resp=None, product=test.engagement.product)
         if jira_helper.get_jira_project(test):
@@ -773,6 +808,7 @@ def add_temp_finding(request, tid, fid):
         if jira_helper.get_jira_project(test):
             jform = JIRAFindingForm(push_all=jira_helper.is_push_all_issues(test), prefix="jiraform", jira_project=jira_helper.get_jira_project(test), finding_form=form)
 
+    
     product_tab = Product_Tab(test.engagement.product, title=_("Add Finding"), tab="engagements")
     product_tab.setEngagement(test.engagement)
     return render(request, "dojo/add_findings.html",

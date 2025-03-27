@@ -88,6 +88,7 @@ def add_findings_to_risk_assessment(user: Dojo_User, risk_assessment: Risk_Asses
         if not finding.duplicate or finding.risk_assessed:
             finding.active = False
             finding.risk_assessed = True
+            finding.risk = risk_assessment 
             
             # Update mitigation to finding if needed 
             if finding.mitigation != risk_assessment.finding_mitigation:
@@ -106,7 +107,7 @@ def add_findings_to_risk_assessment(user: Dojo_User, risk_assessment: Risk_Asses
             finding.save(dedupe_option=False)
             # Update any endpoint statuses on each of the findings
             update_endpoint_statuses(finding, assess_risk=True)
-            risk_assessment.assessed_findings.add(finding)
+            # risk_assessment.assessed_findings.add(finding)
             
         # Add a note to reflect that the finding was removed from the risk acceptance
         if user is not None:

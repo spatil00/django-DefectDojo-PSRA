@@ -584,6 +584,11 @@
                                     <i class="fa-solid fa-file-excel"></i> {% trans "Excel Export" %}
                                 </a>
                             </li>
+                            <li role="presentation">
+                                <a href="{% url 'psra_excel_export' test.id %}?url={{ request.get_full_path }}">
+                                    <i class="fa-solid fa-file-excel"></i> {% trans "PSRA Excel Export" %}
+                                </a>
+                            </li>
                         </ul>
                     </div>
                 </h4>
@@ -1167,6 +1172,8 @@
                                         {% else %}
                                             <a title="{{ finding.id }}" href="{% url 'view_finding' finding.id %}">{{ finding.id }}</a>
                                         {% endif %}
+                                        <!------------------Testing Something----------------------->
+                                        <span class="vector-string" data-vector="{{ finding.risk.vector_string|escapejs }}"></span>
                                         {% if finding.file_path %}
                                             <i class="fa-solid fa-folder has-popover dojo-sup"
                                             data-trigger="hover"

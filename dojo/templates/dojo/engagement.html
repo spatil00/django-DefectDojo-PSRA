@@ -30,6 +30,11 @@
                                     <i class="fa-solid fa-file-excel"></i> Excel Export
                                 </a>
                             </li>
+                            <li role="presentation">
+                                <a id="PSRA_export" href="{% url 'engagement_psra_excel_export' %}?url={{ request.get_full_path }}">
+                                    <i class="fa-solid fa-file-excel"></i> PSRA Excel Export
+                                </a>
+                            </li>
                             </ul>
                             <button id="show-filters" aria-label="Filters" data-toggle="collapse" data-target="#the-filters" class="btn btn-primary toggle-filters"> <i class="fa-solid fa-filter"></i> <i class="caret"></i> </button>
                         </div>
