@@ -1212,37 +1212,42 @@ class PSRAExcelExportView(View):
         warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.worksheet._reader")
         warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.reader.workbook")
 
-        raw_url = request.GET.get("url", "")
-        product_id = request.GET.get("product_id")  # to check if product_id is explicitly passed
+        if test_id:
+            test = self.get_test(test_id)
+            product = test.engagement.product
 
-        try:
-            url_parts = raw_url.split('?')
-            base_path = url_parts[0]
+        else:
+            raw_url = request.GET.get("url", "")
+            product_id = request.GET.get("product_id")
 
-            if not product_id:
-                match = re.search(r'/product/(\d+)/', base_path)
-                if match:
-                    product_id = match.group(1)
+            try:
+                url_parts = raw_url.split('?')
+                base_path = url_parts[0]
 
-            if product_id:
-                product_id = int(product_id)
-            else:
-                return HttpResponse("Error: Cannot determine product ID", status=400)
+                if not product_id:
+                    match = re.search(r'/product/(\d+)/', base_path)
+                    if match:
+                        product_id = match.group(1)
 
-            product = self.get_product(product_id)
+                if product_id:
+                    product_id = int(product_id)
+                else:
+                    return HttpResponse("Error: Cannot determine product ID", status=400)
 
-            if len(url_parts) > 1:
-                additional_params = parse_qs(url_parts[1])
+                product = self.get_product(product_id)
 
-                get_copy = request.GET.copy()
-                for key, value in additional_params.items():
-                    get_copy[key] = value[0] if len(value) == 1 else value
+                if len(url_parts) > 1:
+                    additional_params = parse_qs(url_parts[1])
 
-                request.GET = get_copy
+                    get_copy = request.GET.copy()
+                    for key, value in additional_params.items():
+                        get_copy[key] = value[0] if len(value) == 1 else value
 
-        except (ValueError, TypeError) as e:
-            logger.error(f"Error parsing URL: {raw_url}. Error: {str(e)}")
-            return HttpResponse(f"Invalid URL: {raw_url}", status=400)
+                    request.GET = get_copy
+
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error parsing URL: {raw_url}. Error: {str(e)}")
+                return HttpResponse(f"Invalid URL: {raw_url}", status=400)
 
         pid = product.id
         root_path = environ.Path(__file__) - 3  # Three folders back 
@@ -1275,7 +1280,7 @@ class PSRAExcelExportView(View):
             vector_string = risk_assessment.vector_string
             if not vector_string:
                 continue
-
+            
             vulnerability_description = finding.title
             threat_description = risk_assessment.threat_description
             risk_statement = risk_assessment.risk_statement
@@ -1321,7 +1326,7 @@ class PSRAExcelExportView(View):
 
     def clear_existing_data(self, rmm_worksheet, mitigation_worksheet):
         for row in range(4, rmm_worksheet.max_row + 1):
-            for col in range(1, rmm_worksheet.max_column + 1):
+            for col in range(2, rmm_worksheet.max_column + 1):
                 rmm_worksheet.cell(row=row, column=col).value = None
         
         for row in range(2, mitigation_worksheet.max_row + 1):

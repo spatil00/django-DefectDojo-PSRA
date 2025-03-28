@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 
 class PhilipsRMMSheetParser(object):
     """
-    Philips RMM Parser that supports both Excel formats
+    Philips RMM Parser that supports Excel formats
     """
 
     def __init__(self):
@@ -25,7 +25,7 @@ class PhilipsRMMSheetParser(object):
         return "Philips RMM Scan"
  
     def get_description_for_scan_types(self, scan_type):
-        return "Philips RMM report can be imported in Excel (.xlsx, .xls) or CSV format."
+        return "Philips RMM report can be imported in Excel (.xlsx, .xls)"
 
     def _detect_file_type(self, filename):
         """Detect file type based on file extension"""
@@ -108,8 +108,21 @@ class PhilipsRMMSheetParser(object):
         Returns:
             dict: Structured vulnerability data
         """
+
+        risk_id = self._safe_get(record, 'RiskID')
+
+        if not risk_id:
+            return None
+
+        has_data = any(
+            value and not pd.isna(value) for key, value in record.items() if key != 'RiskID'
+        )
+
+        if not has_data:
+            return None
+
         vulnerability = {
-            'risk_id': self._safe_get(record, 'RiskID'),
+            'risk_id': risk_id,
             'vulnerability': {
                 'id': self._safe_get(record, 'Vulnerability ID'),
                 'description': self._safe_get(record, 'Vulnerability Description'),
@@ -208,7 +221,7 @@ class PhilipsRMMSheetParser(object):
         finding = Finding(test=test)
 
         risk_id = vulnerability.get('risk_id') or 'Unknown'
-        vuln_id = vulnerability.get('vulnerability', {}).get('id') or risk_id
+        vuln_id = vulnerability.get('vulnerability', {}).get('id') or 'Unknown'
 
         finding.title = f"Risk {risk_id}: {vuln_id}"
         if finding.title.strip() in ["Risk :", "Risk Unknown: Unknown"]:
@@ -259,7 +272,10 @@ class PhilipsRMMSheetParser(object):
         elif mit_id.startswith('I'):
             mit_type_code = 'I'
 
-        factor_values = {
+        def safe_contains(value, search_term):
+            return search_term in value.lower() if isinstance(value, str) else False
+    
+        factor_values = {    
             "EaseOfExploit": vulnerability.get('vulnerability', {}).get('metrics', {}).get('ease_of_exploit', ''),
             "EaseOfDiscovery": vulnerability.get('vulnerability', {}).get('metrics', {}).get('ease_of_discovery', ''),
             "Awareness": vulnerability.get('vulnerability', {}).get('metrics', {}).get('awareness', ''),
@@ -267,6 +283,50 @@ class PhilipsRMMSheetParser(object):
             "Confidentiality": impact.get('cia', {}).get('confidentiality', {}).get('score', ''),
             "Integrity": impact.get('cia', {}).get('integrity', {}).get('score', ''),
             "Availability": impact.get('cia', {}).get('availability', {}).get('score', ''),
+            "securityresearcher": vulnerability.get('threat', {}).get('actors', {}).get('security_researcher', ''),
+            "advanced_network_threat": vulnerability.get('threat', {}).get('actors', {}).get('advanced_network_threat', ''),
+            "outsider": vulnerability.get('threat', {}).get('actors', {}).get('outsider', ''),
+            "hardware_defects": safe_contains(vulnerability.get('vulnerability', {}).get('causes', ''), 'hardware defects'),
+            "software_defects": safe_contains(vulnerability.get('vulnerability', {}).get('causes', ''), 'software defects'),
+            "intruder": vulnerability.get('threat', {}).get('actors', {}).get('intruder', ''),
+            "malicious_code": vulnerability.get('threat', {}).get('actors', {}).get('malicious_code', ''),
+            "infrastructure_outage": safe_contains(vulnerability.get('threat', {}).get('description', ''), 'infrastructure outage'),
+            "insider": vulnerability.get('threat', {}).get('actors', {}).get('insider', ''),
+            "trusted_insider": vulnerability.get('threat', {}).get('actors', {}).get('trusted_insider', ''),
+            "clinical_users": vulnerability.get('threat', {}).get('actors', {}).get('clinical_users', ''),
+            "system_admins": vulnerability.get('threat', {}).get('actors', {}).get('system_admins', ''),
+            "natural_or_man_made_disaster": safe_contains(vulnerability.get('threat', {}).get('description', ''), 'natural or man-made disaster'),
+            "engineer": vulnerability.get('threat', {}).get('actors', {}).get('engineer', ''),
+            "automated_or_remote_access": safe_contains(vulnerability.get('threat', {}).get('description', ''), 'automated or remote access'),
+            "agent_none": vulnerability.get('threat', {}).get('actors', {}).get('none', ''),
+            "sensitive_data": safe_contains(vulnerability.get('impact', {}).get('business', {}).get('categories', ''), 'sensitive data'),
+            "personal_data": safe_contains(vulnerability.get('impact', {}).get('business', {}).get('categories', ''), 'personal data'),
+            "hospital_network": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'hospital network'),
+            "audit_trail_data": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'audit trail data'),
+            "configuration": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'configuration'),
+            "system_software": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'system software'),
+            "hardware": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'hardware'),
+            "removable_media_with_ephi": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'removable media with ephi'),
+            "removable_media": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'removable media'),
+            "logging_data": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'logging data'),
+            "product_documentation": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'product documentation'),
+            "personal": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'personal'),
+            "product": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'product'),
+            "network": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'network'),
+            "all_data": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'all data'),
+            "asset_none": safe_contains(vulnerability.get('impact', {}).get('assets', ''), 'none'),
+            
+            "DeltaLikelihood": vulnerability.get('impact', {}).get('residual', {}).get('changes', {}).get('none', ''),
+            "DeltaVulnerability": vulnerability.get('impact', {}).get('residual', {}).get('changes', {}).get('vulnerability', ''),
+            "DeltaConfidentiality": vulnerability.get('impact', {}).get('residual', {}).get('changes', {}).get('confidentiality', ''),
+            "DeltaIntegrity": vulnerability.get('impact', {}).get('residual', {}).get('changes', {}).get('integrity', ''),
+            "DeltaAvailability": vulnerability.get('impact', {}).get('residual', {}).get('changes', {}).get('availability', ''),
+            "BusinessLikelihood": vulnerability.get('impact', {}).get('business', {}).get('likelihood', ''),
+            "FinancialDamage": safe_contains(vulnerability.get('impact', {}).get('business', {}).get('categories', ''), 'financial damage'),
+            "ReputationDamage": safe_contains(vulnerability.get('impact', {}).get('business', {}).get('categories', ''), 'reputation damage'),
+            "RegulatoryNonCompliance": safe_contains(vulnerability.get('impact', {}).get('business', {}).get('categories', ''), 'regulatory non-compliance'),
+            "CustomerNonCompliance": safe_contains(vulnerability.get('impact', {}).get('business', {}).get('categories', ''), 'customer non-compliance'),
+            "PrivacyViolation": safe_contains(vulnerability.get('impact', {}).get('business', {}).get('categories', ''), 'privacy violation'),
         }
 
         factor_codes = {    
@@ -277,6 +337,50 @@ class PhilipsRMMSheetParser(object):
             "Confidentiality": "CI",
             "Integrity": "IT",
             "Availability": "AV",
+            "securityresearcher": "SR",
+            "advanced_network_threat": "AT",
+            "outsider": "OS",
+            "hardware_defects": "HD",
+            "software_defects": "SF",
+            "intruder": "IN",
+            "malicious_code": "MC",
+            "infrastructure_outage": "IO",
+            "insider": "IS",
+            "trusted_insider": "TI",
+            "clinical_users": "CU",
+            "system_admins": "SA",
+            "natural_or_man_made_disaster": "ND",
+            "engineer": "EN",
+            "automated_or_remote_access": "AA",
+            "agent_none": "AG",
+            "sensitive_data": "SD",
+            "personal_data": "PD",
+            "hospital_network": "HN",
+            "audit_trail_data": "ATD",
+            "configuration": "CF",
+            "system_software": "SS",
+            "hardware": "HW",
+            "removable_media_with_ephi": "RE",
+            "removable_media": "RM",
+            "logging_data": "LD",
+            "product_documentation": "PDN",
+            "personal": "PS",
+            "product": "PR",
+            "network": "NW",
+            "all_data": "AD",
+            "asset_none": "AN",
+            
+            "DeltaLikelihood": "DL",
+            "DeltaVulnerability": "DV",
+            "DeltaConfidentiality": "DC",
+            "DeltaIntegrity": "DI",
+            "DeltaAvailability": "DA",
+            "BusinessLikelihood": "BL",
+            "FinancialDamage": "FD",
+            "ReputationDamage": "RD",
+            "RegulatoryNonCompliance": "RN",
+            "CustomerNonCompliance": "CN",
+            "PrivacyViolation": "PV"
         }
 
         vector_components = [f"{factor_codes[key]}:{value}" for key, value in factor_values.items() if value]

@@ -1,4 +1,6 @@
 # #  tests
+import os
+import environ
 import base64
 import logging
 import operator
@@ -56,6 +58,7 @@ from dojo.models import (
     Test,
     Test_Import,
     Test_Import_Finding_Action,
+    Product_File_Path
 )
 from dojo.notifications.helper import create_notification
 from dojo.test.queries import get_authorized_tests
@@ -954,6 +957,21 @@ class ReImportScanResultsView(View):
         context: dict,
     ) -> str | None:
         """Process the form and manipulate the input in any way that is appropriate"""
+        uploaded_file = request.FILES.get("file")
+        # print(uploaded_file)
+        
+        # Save the file if it exists
+        if uploaded_file:
+            try:
+                saved_file_path = self.save_uploaded_file(
+                    uploaded_file, 
+                    context=context
+                )
+                # Optionally add the saved file path to the context for now
+                context['saved_file_path'] = saved_file_path
+            except Exception as e:
+                return f"Error saving file: {str(e)}"
+            
         # Update the running context dict with cleaned form input
         context.update({
             "scan": request.FILES.get("file", None),
@@ -988,6 +1006,41 @@ class ReImportScanResultsView(View):
         context.get("test").tags = context.get("tags")
         context.get("test").version = context.get("version")
         return None
+    
+    def save_uploaded_file(
+        self,
+        uploaded_file,
+        context: dict,
+    ):
+        """
+        Save the uploaded file to uploads directory in the project
+        with a folder named after the product_ID
+        """
+        root_path = environ.Path(__file__) - 3  # Three folders back
+        
+        if context.get("test"):
+            product = context.get("test").engagement.product
+            product_id = product.id
+            product_folder = f"product_{product_id}"
+        else:
+            product = None
+            product_folder = "unknown_product"
+        
+        base_upload_dir = root_path('uploads', 'scan_reports', product_folder)
+        os.makedirs(base_upload_dir, exist_ok=True)
+                
+        filename = f"RiskAssessment_{product_id}.xlsx"
+        
+        file_path = os.path.join(base_upload_dir, filename)
+        
+        with open(file_path, 'wb+') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+        
+        if product:
+            Product_File_Path.objects.create(product=product, product_file_path=file_path)
+
+        return file_path
 
     def process_jira_form(
         self,
