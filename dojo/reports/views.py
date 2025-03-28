@@ -1258,7 +1258,8 @@ class PSRAExcelExportView(View):
         existing_file_path = os.path.join(base_upload_dir, f"RiskAssessment_{pid}.xlsx")
 
         if not os.path.exists(existing_file_path):
-            template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
+            template_path = root_path('uploads', 'PSRA/PSRA template.xlsx')
+            # template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
             shutil.copy(template_path, existing_file_path)
 
         workbook = load_workbook(existing_file_path, data_only=False)

@@ -105,6 +105,7 @@ dojo/media
 # virtualenv
 .venv/
 venv/
+.dojoVENV/
 ENV/
 quick.bash
 *.tgz
