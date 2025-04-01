@@ -1298,7 +1298,6 @@ class PSRAExcelExportView(View):
             factor_values = self.parse_vector_string(vector_string)
             self.fill_finding_row(rmm_worksheet, factor_values, idx)
 
-            rmm_worksheet[f"A{idx}"] = "R" + str((idx))
             rmm_worksheet[f"B{idx}"] = "V"+str(finding.id)
             rmm_worksheet[f"C{idx}"] = vulnerability_description
             rmm_worksheet[f"K{idx}"] = threat_description

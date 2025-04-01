@@ -1,8 +1,8 @@
 import logging
 import hashlib
 import json
+import environ
 import pandas as pd
-from pathlib import Path
 from urllib.parse import urlparse
 from dojo.models import Endpoint, Finding, VulnerabilityFinding, Risk_Assessment
 
@@ -58,11 +58,11 @@ class PhilipsRMMSheetParser(object):
             df = df.dropna(axis=1, how='all')
             df.columns = [col.strip().replace("\n", " ") if isinstance(col, str) else col for col in df.columns]
 
-            root_path = Path(__file__) - 4  # Three folders back
+            root_path = environ.Path(__file__) - 4 # Three folders back
             template_path = root_path('uploads', 'PSRA/PSRA template.xlsx')
 
             template_df = pd.read_excel(template_path, sheet_name="RMM", skiprows=2)
-            template_df = template_df.dropna(axis=1, how='all')
+            # template_df = template_df.dropna(axis=1, how='all') :  
             template_df.columns = [col.strip().replace("\n", " ") if isinstance(col, str) else col for col in template_df.columns]
             
             # Check if the columns match
@@ -70,14 +70,14 @@ class PhilipsRMMSheetParser(object):
             template_columns = set(template_df.columns)
 
             if uploaded_columns != template_columns:
-                missing_in_uploaded = template_columns - uploaded_columns
-                extra_in_uploaded = uploaded_columns - template_columns
+                # missing_in_uploaded = template_columns - uploaded_columns
+                # extra_in_uploaded = uploaded_columns - template_columns
 
-                logging.error("Column mismatch detected!")
-                if missing_in_uploaded:
-                    logging.error(f"Columns missing in uploaded file: {missing_in_uploaded}")
-                if extra_in_uploaded:
-                    logging.error(f"Extra columns in uploaded file: {extra_in_uploaded}")
+                # logging.error("Column mismatch detected!")
+                # if missing_in_uploaded:
+                #     logging.error(f"Columns missing in uploaded file: {missing_in_uploaded}")
+                # if extra_in_uploaded:
+                #     logging.error(f"Extra columns in uploaded file: {extra_in_uploaded}")
 
                 return None  # Stop processing if columns do not match
         
@@ -141,30 +141,22 @@ class PhilipsRMMSheetParser(object):
             print("Skipping record: Missing RiskID")
             return None
 
-        # columns to skip as they come prefilled
-        prefilled_columns = {
-            "V.Score", "V.Level", "T.Score", "I.LScore", "I.IScore", "I.Likelihood", 
-            "I.Impact", "I.RISK", "B.RISK", "C", "I", "A", "R.LScore", "R.IScore", 
-            "R.Likelihood", "R.Impact", "R.RISK", "B.Impact", "B.RISK", "Mitigation Description"
-        }
+        columns_to_check = [
+            "Vulnerability ID",
+            "Vulnerability Description",
+            "Vulnerability Causes or Contributing Factor(s) Consider listing Not Implemented or Conflicting  requirement tags that directly relate to this vulnerability.",
+            "Ease Of Exploit",
+            "Ease Of Discovery",
+            "Awareness",
+            "Detectability"
+        ]
 
-        print(f"Processing RiskID: {risk_id}")
+        # Check if the columns exist in the record, and get the values
+        values_to_check = [record.get(col) for col in columns_to_check]
 
-        # debug print prefilled column values
-        for col in prefilled_columns:
-            if col in record:
-                print(f"Prefilled Column - {col}: {record[col]}")
-
-        # debug print for data presence excluding prefilled columns
-        has_data = False
-        for key, value in record.items():
-            if key != 'RiskID' and key not in prefilled_columns:
-                print(f"Checking Column - {key}: {value}")  # Debugging statement
-                if value and not pd.isna(value):
-                    has_data = True
-
-        if not has_data:
-            print(f"Skipping record: No relevant data for RiskID {risk_id}")
+        # If all values in the specified columns are empty (None, NaN, or ""), skip the row
+        if all(pd.isna(value) or value in [None, ""] for value in values_to_check):
+            print(f"Skipping record: Specified columns are empty for RiskID {risk_id}")
             return None
 
 
@@ -309,6 +301,10 @@ class PhilipsRMMSheetParser(object):
         stride_tags = [key for key, value in stride_threats.items() if value and value.lower() != 'no']
         finding.tags = ','.join(stride_tags)
 
+        finding.risk_assessed = True
+        # Save the finding to get an ID before checking for risk assessment
+        finding.save() #??????????
+
         mit_type_code = 'N'  # Default to "No Mitigation"
         if mit_id.startswith('D'):
             mit_type_code = 'D'
@@ -437,9 +433,15 @@ class PhilipsRMMSheetParser(object):
         print(f"Generated vector string: {vector_string}")
 
         # ---- Create or Update Risk Assessment ----
-        try:
-            risk_assessment = Risk_Assessment.objects.get(name=f"Risk Assessment {risk_id}")
+        # Check if this finding is already associated with a risk assessment
+        existing_risk_assessments = Risk_Assessment.objects.filter(assessed_findings=finding)
+        
+        if existing_risk_assessments.exists():
+            # The finding is already risk assessed, use the existing assessment
+            risk_assessment = existing_risk_assessments.first()
+            print(f"Found existing Risk Assessment for finding: {risk_assessment.name}")
             
+            # Update the risk assessment with new data
             risk_assessment.threat_types = stride_tags
             risk_assessment.mitigation_types = mit_type_code
             risk_assessment.vector_string = vector_string
@@ -449,29 +451,50 @@ class PhilipsRMMSheetParser(object):
             risk_assessment.related_hazard_item = vulnerability.get('related_hazard', '')
             risk_assessment.rational_and_actions = vulnerability.get('acceptance', {}).get('rationale', '')
             risk_assessment.mitigation_reference = mit_desc
+            risk_assessment.save()
             
-            # risk_assessment.save()
-            print(f"Updated existing Risk Assessment: {risk_assessment.name} with vector: {vector_string}")
-        
-        except Risk_Assessment.DoesNotExist:
-            risk_assessment = Risk_Assessment.objects.create(
-                name=f"Risk Assessment {risk_id}",
-                threat_types=stride_tags,
-                mitigation_types=mit_type_code,
-                vector_string=vector_string,
-                vulnerability_cause=vulnerability.get('vulnerability', {}).get('causes', ''),
-                threat_description=vulnerability.get('threat', {}).get('description', ''),
-                risk_statement=vulnerability.get('risk', {}).get('statement', ''),
-                related_hazard_item=vulnerability.get('related_hazard', ''),
-                rational_and_actions=vulnerability.get('acceptance', {}).get('rationale', ''),
-                mitigation_reference=mit_desc
-            )
-            print(f"Created new Risk Assessment: {risk_assessment.name} with vector: {vector_string}")
-            # risk_assessment.save()
+        else:
+            # Try to find a risk assessment by name
+            risk_assessment_name = f"Risk Assessment {risk_id}"
+            try:
+                # Additionally check if this risk assessment already has this finding
+                # to avoid duplicating the relationship
+                risk_assessment = Risk_Assessment.objects.get(
+                    name=risk_assessment_name, 
+                    assessed_findings=finding
+                )
                 
-        # finding.risk = risk_assessment
-        finding.risk_assessed = True
-        finding.save() # ????????
+                # Update existing risk assessment
+                risk_assessment.threat_types = stride_tags
+                risk_assessment.mitigation_types = mit_type_code
+                risk_assessment.vector_string = vector_string
+                risk_assessment.vulnerability_cause = vulnerability.get('vulnerability', {}).get('causes', '')
+                risk_assessment.threat_description = vulnerability.get('threat', {}).get('description', '')
+                risk_assessment.risk_statement = vulnerability.get('risk', {}).get('statement', '')
+                risk_assessment.related_hazard_item = vulnerability.get('related_hazard', '')
+                risk_assessment.rational_and_actions = vulnerability.get('acceptance', {}).get('rationale', '')
+                risk_assessment.mitigation_reference = mit_desc
+                risk_assessment.save()
+                
+                print(f"Updated existing Risk Assessment: {risk_assessment.name} with vector: {vector_string}")
+            
+            except Risk_Assessment.DoesNotExist:
+                # No risk assessment exists for this finding, create a new one
+                risk_assessment = Risk_Assessment.objects.create(
+                    name=risk_assessment_name,
+                    threat_types=stride_tags,
+                    mitigation_types=mit_type_code,
+                    vector_string=vector_string,
+                    vulnerability_cause=vulnerability.get('vulnerability', {}).get('causes', ''),
+                    threat_description=vulnerability.get('threat', {}).get('description', ''),
+                    risk_statement=vulnerability.get('risk', {}).get('statement', ''),
+                    related_hazard_item=vulnerability.get('related_hazard', ''),
+                    rational_and_actions=vulnerability.get('acceptance', {}).get('rationale', ''),
+                    mitigation_reference=mit_desc
+                )
+                print(f"Created new Risk Assessment: {risk_assessment.name} with vector: {vector_string}")
+        
+        # Add the finding to the risk assessment
         risk_assessment.assessed_findings.add(finding)
 
         return finding
