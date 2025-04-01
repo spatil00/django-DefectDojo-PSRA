@@ -30,6 +30,8 @@ PyGithub==1.58.2
 lxml==5.3.1
 Markdown==3.7
 openpyxl==3.1.5
+pandas
+python-docx
 Pillow==11.1.0  # required by django-imagekit
 psycopg
 cryptography==44.0.1

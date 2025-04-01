@@ -2,6 +2,7 @@ import logging
 import hashlib
 import json
 import pandas as pd
+from pathlib import Path
 from urllib.parse import urlparse
 from dojo.models import Endpoint, Finding, VulnerabilityFinding, Risk_Assessment
 
@@ -55,17 +56,42 @@ class PhilipsRMMSheetParser(object):
 
             # Drop fully empty columns
             df = df.dropna(axis=1, how='all')
+            df.columns = [col.strip().replace("\n", " ") if isinstance(col, str) else col for col in df.columns]
 
-            # If columns are still misaligned, manually define them
-            if 'Unnamed' in df.columns[0]:
-                logging.warning("Detected unnamed columns, manually assigning headers...")
-                df.columns = ['Risk ID', 'Vulnerability ID', 'Vulnerability Description', 'Severity', 'Status']
+            root_path = Path(__file__) - 4  # Three folders back
+            template_path = root_path('uploads', 'PSRA/PSRA template.xlsx')
+
+            template_df = pd.read_excel(template_path, sheet_name="RMM", skiprows=2)
+            template_df = template_df.dropna(axis=1, how='all')
+            template_df.columns = [col.strip().replace("\n", " ") if isinstance(col, str) else col for col in template_df.columns]
+            
+            # Check if the columns match
+            uploaded_columns = set(df.columns)
+            template_columns = set(template_df.columns)
+
+            if uploaded_columns != template_columns:
+                missing_in_uploaded = template_columns - uploaded_columns
+                extra_in_uploaded = uploaded_columns - template_columns
+
+                logging.error("Column mismatch detected!")
+                if missing_in_uploaded:
+                    logging.error(f"Columns missing in uploaded file: {missing_in_uploaded}")
+                if extra_in_uploaded:
+                    logging.error(f"Extra columns in uploaded file: {extra_in_uploaded}")
+
+                return None  # Stop processing if columns do not match
+        
+            # # If columns are still misaligned, manually define them
+            # if 'Unnamed' in df.columns[0]:
+            #     logging.warning("Detected unnamed columns, manually assigning headers...")
+            #     df.columns = ['Risk ID', 'Vulnerability ID', 'Vulnerability Description', 'Severity', 'Status']
 
             return self._process_findings(df, test)
 
         except Exception as e:
             logging.error(f"Error parsing file: {e}")
-            return []
+            return None
+
         
     def _process_findings(self, df, test):
         """Process findings from Excel or CSV format"""
@@ -112,14 +138,35 @@ class PhilipsRMMSheetParser(object):
         risk_id = self._safe_get(record, 'RiskID')
 
         if not risk_id:
+            print("Skipping record: Missing RiskID")
             return None
 
-        has_data = any(
-            value and not pd.isna(value) for key, value in record.items() if key != 'RiskID'
-        )
+        # columns to skip as they come prefilled
+        prefilled_columns = {
+            "V.Score", "V.Level", "T.Score", "I.LScore", "I.IScore", "I.Likelihood", 
+            "I.Impact", "I.RISK", "B.RISK", "C", "I", "A", "R.LScore", "R.IScore", 
+            "R.Likelihood", "R.Impact", "R.RISK", "B.Impact", "B.RISK", "Mitigation Description"
+        }
+
+        print(f"Processing RiskID: {risk_id}")
+
+        # debug print prefilled column values
+        for col in prefilled_columns:
+            if col in record:
+                print(f"Prefilled Column - {col}: {record[col]}")
+
+        # debug print for data presence excluding prefilled columns
+        has_data = False
+        for key, value in record.items():
+            if key != 'RiskID' and key not in prefilled_columns:
+                print(f"Checking Column - {key}: {value}")  # Debugging statement
+                if value and not pd.isna(value):
+                    has_data = True
 
         if not has_data:
+            print(f"Skipping record: No relevant data for RiskID {risk_id}")
             return None
+
 
         vulnerability = {
             'risk_id': risk_id,
