@@ -376,8 +376,15 @@ class PhilipsRMMSheetParser(object):
             "PV": business_categories.get('privacy', '0')
         }
 
-        vector_components = [f"{code}:{value}" for code, value in factor_values.items() if value]
+        # vector_components = [f"{code}:{value}" for code, value in factor_values.items() if value]
+        # vector_string = f"PSRA:1.0 {'/'.join(vector_components)}" if vector_components else "PSRA:1.0"
+
+        vector_components = [
+            f"{code}:{value}" for code, value in factor_values.items()
+            if not (isinstance(value, str) and value == '')
+        ]
         vector_string = f"PSRA:1.0 {'/'.join(vector_components)}" if vector_components else "PSRA:1.0"
+
         
         risk_assessment_name = f"Risk Assessment {risk_id}"
         
