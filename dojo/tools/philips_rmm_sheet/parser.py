@@ -67,13 +67,17 @@ class PhilipsRMMSheetParser(object):
                 
                 id_col = next((col for col in mitigations_df.columns if col and 'ID' in col), None)
                 ref_col = next((col for col in mitigations_df.columns if col and 'Reference' in col), None)
+                desc_col = next((col for col in mitigations_df.columns if col and ('Description' in col or 'Desc' in col)), None)
                 
                 mitigation_lookup = {}
-                if id_col and ref_col:
-                    mitigation_lookup = dict(zip(
-                        mitigations_df[id_col].astype(str), 
-                        mitigations_df[ref_col].fillna("").astype(str)
-                    ))
+                if id_col:
+                    mitigation_lookup = {
+                        str(row[id_col]): {
+                            'reference': str(row.get(ref_col, "")) if ref_col and not pd.isna(row.get(ref_col)) else "",
+                            'description': str(row.get(desc_col, "")) if desc_col and not pd.isna(row.get(desc_col)) else ""
+                        }
+                        for _, row in mitigations_df.iterrows() if not pd.isna(row.get(id_col))
+                    }
             except Exception:
                 mitigation_lookup = {}
 
@@ -95,8 +99,13 @@ class PhilipsRMMSheetParser(object):
             vulnerability = self._process_vulnerability_record(record)
             if vulnerability:
                 mitigation_id = vulnerability.get('mitigation', {}).get('id')
-                if mitigation_id and mitigation_id in mitigation_lookup:
-                    vulnerability['mitigation']['mitigation_reference'] = mitigation_lookup[mitigation_id]
+                if mitigation_id and str(mitigation_id) in mitigation_lookup:
+                    mitigation_data = mitigation_lookup[str(mitigation_id)]
+                    vulnerability['mitigation']['mitigation_reference'] = mitigation_data['reference']
+                    
+                    if mitigation_data['description']:
+                        vulnerability['mitigation']['description'] += f"\n\n{mitigation_data['description']}"
+                
                 vulnerabilities.append(vulnerability)
         
         for vulnerability in vulnerabilities:
@@ -284,10 +293,10 @@ class PhilipsRMMSheetParser(object):
         avail = cia.get('availability', {})
         
         finding.impact = f"""
-    Confidentiality Impact: {conf.get('impact', '')} (Score: {conf.get('score', '')})
-    Integrity Impact: {integ.get('impact', '')} (Score: {integ.get('score', '')})
-    Availability Impact: {avail.get('impact', '')} (Score: {avail.get('score', '')})
-    Business Impact: {impact.get('business', {}).get('impact', '')} (Score: {impact.get('business', {}).get('score', '')})
+Confidentiality Impact: {conf.get('impact', '')} (Score: {conf.get('score', '')})
+Integrity Impact: {integ.get('impact', '')} (Score: {integ.get('score', '')})
+Availability Impact: {avail.get('impact', '')} (Score: {avail.get('score', '')})
+Business Impact: {impact.get('business', {}).get('impact', '')} (Score: {impact.get('business', {}).get('score', '')})
         """.strip()
 
         stride_threats = vulnerability.get('threat', {}).get('stride', {})

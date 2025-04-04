@@ -1310,7 +1310,6 @@ class PSRAExcelExportView(View):
             mitigation_worksheet[f"C{idx-2}"] = mitigation_type
             mitigation_worksheet[f"D{idx-2}"] = mitigation_reference
             rmm_worksheet[f"BI{idx}"] = "M"+str(finding.id)
-            rmm_worksheet[f"BJ{idx}"] = finding.mitigation
 
         workbook.save(existing_file_path)
 
