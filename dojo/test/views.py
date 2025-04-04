@@ -679,7 +679,7 @@ class AddFindingView(View):
         return finding, request, all_forms_valid
 
     def get_template(self):
-        print("HERE AT TEMPLATE GET FUNCTION OF ADD FINDINGS")
+        # print("HERE AT TEMPLATE GET FUNCTION OF ADD FINDINGS")
         return "dojo/add_findings.html"
 
     def get(self, request: HttpRequest, test_id: int):
@@ -705,7 +705,7 @@ class AddFindingView(View):
         if success:
             if "_Finished" in request.POST:
                 return HttpResponseRedirect(reverse("view_test", args=(test.id,)))
-            print("1111111111111111111111111111111")
+            # print("1111111111111111111111111111111")
             return HttpResponseRedirect(reverse("add_findings", args=(test.id,)))
         context["form_error"] = True
         # Render the form
@@ -721,7 +721,7 @@ def add_temp_finding(request, tid, fid):
     push_all_jira_issues = jira_helper.is_push_all_issues(finding)
 
     if request.method == "POST":
-        print("HERE AT ADD FINDINGS")
+        # print("HERE AT ADD FINDINGS")
 
         form = AddFindingForm(request.POST, req_resp=None, product=test.engagement.product)
         if jira_helper.get_jira_project(test):

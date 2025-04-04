@@ -336,7 +336,6 @@ class DefaultImporter(BaseImporter, DefaultImporterOptions):
                 self.parsed_findings = self.parse_findings_dynamic_test_type(scan, parser)
             else:
                 self.parsed_findings = self.parse_findings_static_test_type(scan, parser)
-                print("PARSED: ", self.parsed_findings)
         return self.parsed_findings
 
     def parse_findings_static_test_type(

@@ -1101,7 +1101,7 @@ def new_eng_for_app(request, pid, *, cicd=False):
                 if "_Add Tests" in request.POST:
                     return HttpResponseRedirect(reverse("add_tests", args=(engagement.id,)))
                 if "_Import Scan Results" in request.POST:
-                    print("ENGAGEMENT ID: ", engagement.id) #ID DEBUG
+                    # print("ENGAGEMENT ID: ", engagement.id) #ID DEBUG
                     return HttpResponseRedirect(reverse("import_scan_results", args=(engagement.id,)))
                 return HttpResponseRedirect(reverse("view_engagement", args=(engagement.id,)))
             # engagement was saved, but JIRA errors, so goto edit_engagement
@@ -1122,7 +1122,7 @@ def new_eng_for_app(request, pid, *, cicd=False):
     title = _("New CI/CD Engagement") if cicd else _("New Interactive Engagement")
 
     product_tab = Product_Tab(product, title=title, tab="engagements")
-    print('I AM HERE') #CHECK FOR CLICK
+    # print('I AM HERE') #CHECK FOR CLICK
     return render(request, "dojo/new_eng.html", {
         "form": form,
         "title": title,
