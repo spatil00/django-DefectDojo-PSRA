@@ -1266,8 +1266,6 @@ class PSRAExcelExportView(View):
         rmm_worksheet = workbook["RMM"]
         mitigation_worksheet = workbook["Mitigations"]
 
-        self.clear_existing_data(rmm_worksheet, mitigation_worksheet)
-
         findings, _obj = get_findings(request)
         self.findings = findings
         findings = self.add_findings_data()
@@ -1282,7 +1280,7 @@ class PSRAExcelExportView(View):
             if not vector_string:
                 continue
             
-            vulnerability_description = finding.title
+            vulnerability_description = finding.description
             threat_description = risk_assessment.threat_description
             risk_statement = risk_assessment.risk_statement
             hazard_statement = risk_assessment.related_hazard_item
@@ -1312,6 +1310,7 @@ class PSRAExcelExportView(View):
             mitigation_worksheet[f"C{idx-2}"] = mitigation_type
             mitigation_worksheet[f"D{idx-2}"] = mitigation_reference
             rmm_worksheet[f"BI{idx}"] = "M"+str(finding.id)
+            rmm_worksheet[f"BJ{idx}"] = finding.mitigation
 
         workbook.save(existing_file_path)
 
@@ -1325,11 +1324,3 @@ class PSRAExcelExportView(View):
         return response
 
 
-    def clear_existing_data(self, rmm_worksheet, mitigation_worksheet):
-        for row in range(4, rmm_worksheet.max_row + 1):
-            for col in range(2, rmm_worksheet.max_column + 1):
-                rmm_worksheet.cell(row=row, column=col).value = None
-        
-        for row in range(2, mitigation_worksheet.max_row + 1):
-            for col in range(1, mitigation_worksheet.max_column + 1):
-                mitigation_worksheet.cell(row=row, column=col).value = None
