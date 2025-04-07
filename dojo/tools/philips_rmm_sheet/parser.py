@@ -243,7 +243,7 @@ class PhilipsRMMSheetParser(object):
         top_indices = tfidf_scores.argsort()[-top_n:][::-1]
         top_keywords = [feature_names[i] for i in top_indices]
 
-        return " ".join(top_keywords).title() + " Vulnerability"
+        return " ".join(top_keywords).title()
 
     def _convert_vulnerability_to_finding(self, vulnerability, test):
         """

@@ -5,10 +5,14 @@
       <div class="column column-left">
         <div class="metric">
           <h4 id="Delta_Likelihood_Heading">Reduction in threat score ?
-            <i>
-              <i class="fa-solid fa-circle-question has-popover small-help-icon" data-trigger="hover" data-html="true" data-content="Rate the reduction of in likelihood after mitigation is applied" data-placement="right" data-container="body">
+              <i class="fa-solid fa-circle-question has-popover small-help-icon" data-trigger="hover" data-html="true" data-content="
+              If mitigation helps reduce the
+              threat score, enter here the
+              amount by which score can be
+              reduced. 
+              " 
+              data-placement="right" data-container="body">
               </i>
-            </i>
           </h4>
           <div class="rating-group">
                 <button type="button" name="DLikelihood"  value="9" data-factor="DeltaLikelihood" class="btn-scale btn-scale-asc-1">9</button>
@@ -25,7 +29,16 @@
         </div>
         
         <div class="metric">
-          <h4 id="Delta_vulnerability_Heading">Reduction in vulnerability score ?</h4>
+          <h4 id="Delta_vulnerability_Heading">Reduction in vulnerability score ?
+            <i class="fa-solid fa-circle-question has-popover small-help-icon" data-trigger="hover" data-html="true" data-content="
+              If mitigation helps reduce the
+              vulnerability score, enter here the
+              amount by which score can be
+              reduced.
+              " 
+              data-placement="right" data-container="body">
+              </i>
+          </h4>
           <div class="rating-group">
                 <button type="button" name="DVulnerability"  value="9" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-1">9</button>
                 <button type="button" name="DVulnerability" value="8" data-factor="DeltaVulnerability" class="btn-scale btn-scale-asc-2">8</button>

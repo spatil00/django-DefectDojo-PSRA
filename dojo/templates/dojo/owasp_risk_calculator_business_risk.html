@@ -5,7 +5,17 @@
         <!-- Column Left - Likelihood and Financial Impact -->
         <div class="column column-left">
             <div class="metric">
-                <h3 id="Finance_Heading">Finance</h3>
+                <h4 id="Finance_Heading">Finance
+                    <i class="fa-solid fa-circle-question has-popover small-help-icon"
+                    data-trigger="hover" data-html="true"
+                    data-content="Financial damage for product?<br>
+                    <li>Less than the cost to fix the vulnerability (1)</li>
+                    <li>Minor effect on annual profit of product (3)</li>
+                    <li>Significant effect on annual profit of product (7)</li>
+                    <li>Product recalls or replacements (9)</li>"
+                    data-placement="right" data-container="body">
+                    </i>
+                </h4>
                 <div class="rating-group">
                     <button type="button" name="Finance" value="0" data-factor="FinancialDamage" class="btn-scale btn-scale-asc-0">0</button>
                     <button type="button" name="Finance" value="1" data-factor="FinancialDamage" class="btn-scale btn-scale-asc-1">1</button>
@@ -21,7 +31,17 @@
             </div>
 
             <div class="metric">
-                <h3 id="Reputation_Heading">Reputation</h3>
+                <h4 id="Reputation_Heading">Reputation
+                    <i class="fa-solid fa-circle-question has-popover small-help-icon"
+                    data-trigger="hover" data-html="true"
+                    data-content="Product/Philips reputation harm?<br>
+                    <li>Minimal Damage (1)</li>
+                    <li>Loss of major accounts/deals (4)</li>
+                    <li>Loss of goodwill (5)</li>
+                    <li>Brand damage (9)</li>"
+                    data-placement="right" data-container="body">
+                    </i>
+                </h4>
                 <div class="rating-group">
                     <button type="button" name="Reputation" value="0" data-factor="ReputationDamage" class="btn-scale btn-scale-asc-0">0</button>
                     <button type="button" name="Reputation" value="1" data-factor="ReputationDamage" class="btn-scale btn-scale-asc-1">1</button>
@@ -37,7 +57,16 @@
             </div>
 
             <div class="metric">
-                <h3 id="RegulatoryNonCompliance_Heading">Regulatory Non-Compliance</h3>
+                <h4 id="RegulatoryNonCompliance_Heading">Regulatory Non-Compliance
+                    <i class="fa-solid fa-circle-question has-popover small-help-icon"
+                    data-trigger="hover" data-html="true"
+                    data-content="Non-compliance exposure?<br>
+                    <li>Minor violation (no financial penalty) (2)</li>
+                    <li>Clear violation (financial penalties) (7)</li>
+                    <li>High profile violation (criminal penalties) (9)</li>"
+                    data-placement="right" data-container="body">
+                    </i>
+                </h4>
                 <div class="rating-group">
                     <button type="button" name="RegulatoryNonCompliance" value="0" data-factor="RegulatoryNonCompliance" class="btn-scale btn-scale-asc-0">0</button>
                     <button type="button" name="RegulatoryNonCompliance" value="1" data-factor="RegulatoryNonCompliance" class="btn-scale btn-scale-asc-1">1</button>
@@ -53,7 +82,16 @@
             </div>
 
             <div class="metric">
-                <h3 id="CustomerNonCompliance_Heading">Customer Non-Compliance</h3>
+                <h4 id="CustomerNonCompliance_Heading">Customer Non-Compliance
+                    <i class="fa-solid fa-circle-question has-popover small-help-icon"
+                    data-trigger="hover" data-html="true"
+                    data-content="Non-compliance exposure?<br>
+                    <li>Minor violation of customer needs/contracts (2)</li>
+                    <li>Clear violation of customer needs/contracts (7)</li>
+                    <li>High profile violation of customer needs/contracts (9)</li>"
+                    data-placement="right" data-container="body">
+                    </i>
+                </h4>
                 <div class="rating-group">
                     <button type="button" name="CustomerNonCompliance" value="0" data-factor="CustomerNonCompliance" class="btn-scale btn-scale-asc-0">0</button>
                     <button type="button" name="CustomerNonCompliance" value="1" data-factor="CustomerNonCompliance" class="btn-scale btn-scale-asc-1">1</button>
@@ -69,7 +107,17 @@
             </div>
 
             <div class="metric">
-                <h3 id="PrivacyViolation_Heading">Privacy Violation</h3>
+                <h4 id="PrivacyViolation_Heading">Privacy Violation
+                    <i class="fa-solid fa-circle-question has-popover small-help-icon"
+                    data-trigger="hover" data-html="true"
+                    data-content="How much PII disclosed?<br>
+                    <li>One individual (3)</li>
+                    <li>Hundreds of people (5)</li>
+                    <li>Thousands of people (7)</li>
+                    <li>Millions of people (9)</li>"
+                    data-placement="right" data-container="body">
+                    </i>
+                </h4>
                 <div class="rating-group">
                     <button type="button" name="PrivacyViolation" value="0" data-factor="PrivacyViolation" class="btn-scale btn-scale-asc-0">0</button>
                     <button type="button" name="PrivacyViolation" value="1" data-factor="PrivacyViolation" class="btn-scale btn-scale-asc-1">1</button>
@@ -85,7 +133,21 @@
             </div>
 
             <div class="metric">
-                <h3 id="BusinessLikelihood_Heading">Business Likelihood</h3>
+                <h3 id="BusinessLikelihood_Heading">Business Likelihood
+                    <i class="fa-solid fa-circle-question has-popover small-help-icon"
+                    data-trigger="hover" data-html="true"
+                    data-content="
+                    By default use the technical
+                    residual likelihood.
+                    Reconsider if for Business the
+                    likelihood is rated differently e.g.
+                    when, although technical controls
+                    are assessed as effective, this risk is
+                    perceived differently from business
+                    side."
+                    data-placement="right" data-container="body">
+                    </i>
+                </h3>
                 <div class="rating-group">
                     <button type="button" name="BusinessLikelihood" value="VL" data-factor="BusinessLikelihood" class="btn-business-likelihood btn-business-likelihood-verylow">Very Low</button>
                     <button type="button" name="BusinessLikelihood" value="L" data-factor="BusinessLikelihood" class="btn-business-likelihood btn-business-likelihood-low">Low</button>
