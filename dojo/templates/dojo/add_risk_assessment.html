@@ -27,72 +27,10 @@
         <br/>
         <form id="add_risk_assessment" enctype="multipart/form-data" class="form-horizontal" method="post" action="">
             {% csrf_token %}
-            {% for field in form %}
-                {% if not field.is_hidden %}
-                    <div class="form-group">
-                        <label class="col-sm-2 control-label">{{ field.label }} 
-                            {% if field.help_text %}
-                            <i class="fa-solid fa-circle-question has-popover" data-trigger="hover" data-content="{{ field.help_text }}" data-placement="right" data-container="body">
-                            </i>
-                            {% endif %}
-                        </label>
-                        <div class="col-sm-10">
-                            {{ field }}
-                            {{ field.errors }}
-                        </div>
-                    </div>
-                {% else %}
-                    {{ field }}
-                {% endif %}    
-
-                {% if field.name == "assessed_findings" %}
-                <div id="vector_string_container" class="form-group">
-                    <label class="col-sm-2 control-label">Vector String</label>
-                    <div class="col-sm-10">
-                        <span id="vector_string_show">{{ vector_string }}</span>
-                    </div>
-                </div>
-                <div id="vulnerability_evaluation_container" class="form-group">
-                    <label class="col-sm-2 control-label">Vulnerability Evaluation</label>
-                    <div class="col-sm-10">
-                        {% include "dojo/owasp_risk_calculator_vulnerability_evalution.html" %}
-                    </div>
-                </div>
-                {% endif %}
-
-                {% if field.name == "risk_statement" %}
-                    <div id="initial_risk_container" class="form-group">
-                        <label class="col-sm-2 control-label">Initial Risk
-                            <i class="fa-solid fa-circle-question has-popover small-help-icon" data-trigger="hover" data-html="true" data-content="
-                                    Select appropriate values<br><br>
-                                    <strong>For Likelihood:</strong> Choose relevant values for threat agent factors (based on agents skill level, motive, opportunity, and size) and technical asset factors, choose assets that are affected.<br><br>
-                                    <strong>For Impact:</strong> Select values for confidentiality, availability, and integrity to assess the impact of a potential exploit." data-placement="right" data-container="body">
-                            </i>
-                        </label>
-                        <div class="col-sm-10">
-                            {% include "dojo/owasp_risk_calculator_initial_risk.html" %}
-                        </div>
-                    </div>
-                {% endif %}
             
-              <!-- Check if 'finding_mitigation' hasn't been rendered yet -->
-                {% if field.name == "accept_risk" %}
-                    <div id="residual_risk_container" class="form-group">
-                        <label class="col-sm-2 control-label">Residual Risk</label>
-                        <div class="col-sm-10">
-                            {% include "dojo/owasp_risk_calculator_residual_risk.html" %}
-                        </div>
-                    </div>
-
-                    <div id="business_risk_container" class="form-group">
-                        <label class="col-sm-2 control-label">Business Risk</label>
-                        <div class="col-sm-10">
-                            {% include "dojo/owasp_risk_calculator_business_risk.html" %}
-                        </div>
-                    </div>
-                {% endif %}
-            {% endfor %}
-           <br/><br/>
+            {% include "dojo/form_fields_custom.html" with form=form %}
+            
+            <br/><br/>
             <!-- Submit button -->
             <div class="form-group">
                 <div class="col-sm-offset-2 col-sm-10">
