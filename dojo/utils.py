@@ -2355,7 +2355,7 @@ class async_delete:
                 (Endpoint, "product"),
                 (Finding, "test__engagement__product"),
                 (Test, "engagement__product"),
-                (Engagement, "product")
+                (Engagement, "product"),
                 (Product_File_Path, "product"),],
             "Engagement": [
                 (Finding, "test__engagement"),

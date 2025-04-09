@@ -32,8 +32,8 @@ RUN CPUCOUNT=1 pip3 wheel --wheel-dir=/tmp/wheels -r ./requirements.txt
 
 FROM base AS django
 WORKDIR /app
-ARG uid=1001
-ARG gid=1337
+ARG uid=1000
+ARG gid=1000
 ARG appuser=defectdojo
 ENV appuser=${appuser}
 RUN \
@@ -113,7 +113,11 @@ RUN \
     mkdir -p media/threat && chown -R ${uid} media && \
     # To avoid warning: (staticfiles.W004) The directory '/app/components/node_modules' in the STATICFILES_DIRS setting does not exist.
     mkdir -p components/node_modules && \
-    chown ${appuser} components/node_modules
+    chown ${appuser} components/node_modules && \
+    # Uploads dir for dynamic scan report folders
+    mkdir -p /app/uploads/scan_reports && \
+    chown -R ${uid}:${gid} /app/uploads && \
+    chmod -R 775 /app/uploads
 USER ${uid}
 ENV \
   # Only variables that are not defined in settings.dist.py
