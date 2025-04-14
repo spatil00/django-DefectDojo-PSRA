@@ -5,7 +5,7 @@
 # Dockerfile.nginx to use the caching mechanism of Docker.
 
 # Ref: https://devguide.python.org/#branchstatus
-FROM python:3.11.9-slim-bookworm@sha256:8c1036ec919826052306dfb5286e4753ffd9d5f6c24fbc352a5399c3b405b57e AS base
+FROM python:3.11.11-slim-bookworm@sha256:42420f737ba91d509fc60d5ed65ed0492678a90c561e1fa08786ae8ba8b52eda AS base
 FROM base AS build
 WORKDIR /app
 RUN \
@@ -32,8 +32,8 @@ RUN CPUCOUNT=1 pip3 wheel --wheel-dir=/tmp/wheels -r ./requirements.txt
 
 FROM base AS django
 WORKDIR /app
-ARG uid=1001
-ARG gid=1337
+ARG uid=1000
+ARG gid=1000
 ARG appuser=defectdojo
 ENV appuser=${appuser}
 RUN \
@@ -71,6 +71,7 @@ COPY \
   docker/entrypoint-celery-beat.sh \
   docker/entrypoint-celery-worker.sh \
   docker/entrypoint-initializer.sh \
+  docker/entrypoint-first-boot.sh \
   docker/entrypoint-uwsgi.sh \
   docker/entrypoint-uwsgi-dev.sh \
   docker/entrypoint-unit-tests.sh \
@@ -112,7 +113,11 @@ RUN \
     mkdir -p media/threat && chown -R ${uid} media && \
     # To avoid warning: (staticfiles.W004) The directory '/app/components/node_modules' in the STATICFILES_DIRS setting does not exist.
     mkdir -p components/node_modules && \
-    chown ${appuser} components/node_modules
+    chown ${appuser} components/node_modules && \
+    # Uploads dir for dynamic scan report folders
+    mkdir -p /app/uploads/scan_reports && \
+    chown -R ${uid}:${gid} /app/uploads && \
+    chmod -R 775 /app/uploads
 USER ${uid}
 ENV \
   # Only variables that are not defined in settings.dist.py

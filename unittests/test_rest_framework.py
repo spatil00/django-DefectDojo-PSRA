@@ -1,10 +1,10 @@
+import functools
 import json
 import logging
 import pathlib
 from collections import OrderedDict
 from enum import Enum
 from json import dumps
-from pathlib import Path
 
 # from drf_spectacular.renderers import OpenApiJsonRenderer
 from unittest.mock import ANY, MagicMock, call, patch
@@ -31,6 +31,7 @@ from dojo.api_v2.prefetch.utils import _get_prefetchable_fields
 from dojo.api_v2.views import (
     AnnouncementViewSet,
     AppAnalysisViewSet,
+    BurpRawRequestResponseViewSet,
     ConfigurationPermissionViewSet,
     CredentialsMappingViewSet,
     CredentialsViewSet,
@@ -133,7 +134,7 @@ from dojo.models import (
     UserContactInfo,
 )
 
-from .dojo_test_case import DojoAPITestCase
+from .dojo_test_case import DojoAPITestCase, get_unit_tests_scans_path
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,7 @@ IMPORTER_MOCK_RETURN_VALUE = None, 0, 0, 0, 0, 0, MagicMock()
 REIMPORTER_MOCK_RETURN_VALUE = None, 0, 0, 0, 0, 0, MagicMock()
 
 
+@functools.cache
 def get_open_api3_json_schema():
     generator_class = spectacular_settings.DEFAULT_GENERATOR_CLASS
     generator = generator_class()
@@ -161,11 +163,6 @@ def get_open_api3_json_schema():
     validate_schema(schema)
 
     return schema
-
-
-# use ugly global to avoid generating the schema for every test/method (as it's slow)
-global open_api3_json_schema
-open_api3_json_schema = get_open_api3_json_schema()
 
 
 def skipIfNotSubclass(baseclass):
@@ -279,7 +276,7 @@ class SchemaChecker:
             _check_helper(isinstance(obj, list))
             return None
         if schema_type == TYPE_OBJECT:
-            _check_helper(isinstance(obj, OrderedDict) or isinstance(obj, dict))
+            _check_helper(isinstance(obj, OrderedDict | dict))
             return None
         if schema_type == TYPE_STRING:
             _check_helper(isinstance(obj, str))
@@ -290,9 +287,9 @@ class SchemaChecker:
 
         # print('_check_type ok for: %s: %s' % (schema, obj))
 
-    def _with_prefix(self, prefix, callable, *args):
+    def _with_prefix(self, prefix, callable_function, *args):
         self._push_prefix(prefix)
-        callable(*args)
+        callable_function(*args)
         self._pop_prefix()
 
     def check(self, schema, obj):
@@ -320,10 +317,10 @@ class SchemaChecker:
                         # self._with_prefix(name, _check, prop, obj_child)
                         _check(prop, obj_child)
 
-                for child_name in obj.keys():
+                for child_name in obj:
                     # TODO: prefetch mixins not picked up by spectcular?
                     if child_name != "prefetch":
-                        if not properties or child_name not in properties.keys():
+                        if not properties or child_name not in properties:
                             self._has_failed = True
                             self._register_error(f'unexpected property "{child_name}" found')
 
@@ -363,7 +360,7 @@ class BaseClass:
             self.client = APIClient()
             self.client.credentials(HTTP_AUTHORIZATION="Token " + token.key)
             self.url = reverse(self.viewname + "-list")
-            self.schema = open_api3_json_schema
+            self.schema = get_open_api3_json_schema()
 
         def setUp_not_authorized(self):
             testuser = User.objects.get(id=3)
@@ -388,7 +385,7 @@ class BaseClass:
             # print(vars(schema_checker))
             schema_checker.check(self.schema, obj)
 
-        def check_schema_response(self, method, status_code, response, detail=False):
+        def check_schema_response(self, method, status_code, response, *, detail=False):
             detail_path = "{id}/" if detail else ""
             endpoints_schema = self.schema["paths"][format_url(f"/{self.endpoint_path}/{detail_path}")]
             schema = endpoints_schema[method]["responses"][status_code]["content"]["application/json"]["schema"]
@@ -440,7 +437,7 @@ class BaseClass:
 
         @skipIfNotSubclass(RetrieveModelMixin)
         def test_detail_object_not_authorized(self):
-            if not self.test_type == TestType.OBJECT_PERMISSIONS:
+            if self.test_type != TestType.OBJECT_PERMISSIONS:
                 self.skipTest("Authorization is not object based")
 
             self.setUp_not_authorized()
@@ -452,7 +449,7 @@ class BaseClass:
 
         @skipIfNotSubclass(RetrieveModelMixin)
         def test_detail_configuration_not_authorized(self):
-            if not self.test_type == TestType.CONFIGURATION_PERMISSIONS:
+            if self.test_type != TestType.CONFIGURATION_PERMISSIONS:
                 self.skipTest("Authorization is not configuration based")
 
             self.setUp_not_authorized()
@@ -465,7 +462,7 @@ class BaseClass:
     class ListRequestTest(RESTEndpointTest):
         @skipIfNotSubclass(ListModelMixin)
         def test_list(self):
-            # print(open_api3_json_schema)
+            # print(get_open_api3_json_schema())
             # validator = ResponseValidator(spec)
 
             check_for_tags = False
@@ -526,17 +523,14 @@ class BaseClass:
                     values = field_value if isinstance(field_value, list) else [field_value]
 
                     for value in values:
-                        if not isinstance(value, int):
-                            clean_value = value["id"]
-                        else:
-                            clean_value = value
+                        clean_value = value["id"] if not isinstance(value, int) else value
                         self.assertIn(clean_value, objs["prefetch"][field])
 
             # TODO: add schema check
 
         @skipIfNotSubclass(ListModelMixin)
         def test_list_object_not_authorized(self):
-            if not self.test_type == TestType.OBJECT_PERMISSIONS:
+            if self.test_type != TestType.OBJECT_PERMISSIONS:
                 self.skipTest("Authorization is not object based")
 
             self.setUp_not_authorized()
@@ -547,7 +541,7 @@ class BaseClass:
 
         @skipIfNotSubclass(ListModelMixin)
         def test_list_configuration_not_authorized(self):
-            if not self.test_type == TestType.CONFIGURATION_PERMISSIONS:
+            if self.test_type != TestType.CONFIGURATION_PERMISSIONS:
                 self.skipTest("Authorization is not configuration based")
 
             self.setUp_not_authorized()
@@ -577,7 +571,7 @@ class BaseClass:
         @skipIfNotSubclass(CreateModelMixin)
         @patch("dojo.api_v2.permissions.user_has_permission")
         def test_create_object_not_authorized(self, mock):
-            if not self.test_type == TestType.OBJECT_PERMISSIONS:
+            if self.test_type != TestType.OBJECT_PERMISSIONS:
                 self.skipTest("Authorization is not object based")
 
             mock.return_value = False
@@ -590,7 +584,7 @@ class BaseClass:
 
         @skipIfNotSubclass(CreateModelMixin)
         def test_create_configuration_not_authorized(self):
-            if not self.test_type == TestType.CONFIGURATION_PERMISSIONS:
+            if self.test_type != TestType.CONFIGURATION_PERMISSIONS:
                 self.skipTest("Authorization is not configuration based")
 
             self.setUp_not_authorized()
@@ -610,12 +604,9 @@ class BaseClass:
 
             for key, value in self.update_fields.items():
                 # some exception as push_to_jira has been implemented strangely in the update methods in the api
-                if key not in ["push_to_jira", "ssh", "password", "api_key"]:
+                if key not in {"push_to_jira", "ssh", "password", "api_key"}:
                     # Convert data to sets to avoid problems with lists
-                    if isinstance(value, list):
-                        clean_value = set(value)
-                    else:
-                        clean_value = value
+                    clean_value = set(value) if isinstance(value, list) else value
                     if isinstance(response.data[key], list):
                         response_data = set(response.data[key])
                     else:
@@ -642,7 +633,7 @@ class BaseClass:
         @skipIfNotSubclass(UpdateModelMixin)
         @patch("dojo.api_v2.permissions.user_has_permission")
         def test_update_object_not_authorized(self, mock):
-            if not self.test_type == TestType.OBJECT_PERMISSIONS:
+            if self.test_type != TestType.OBJECT_PERMISSIONS:
                 self.skipTest("Authorization is not object based")
 
             mock.return_value = False
@@ -671,7 +662,7 @@ class BaseClass:
 
         @skipIfNotSubclass(UpdateModelMixin)
         def test_update_configuration_not_authorized(self):
-            if not self.test_type == TestType.CONFIGURATION_PERMISSIONS:
+            if self.test_type != TestType.CONFIGURATION_PERMISSIONS:
                 self.skipTest("Authorization is not configuration based")
 
             self.setUp_not_authorized()
@@ -731,7 +722,7 @@ class BaseClass:
         @skipIfNotSubclass(DestroyModelMixin)
         @patch("dojo.api_v2.permissions.user_has_permission")
         def test_delete_object_not_authorized(self, mock):
-            if not self.test_type == TestType.OBJECT_PERMISSIONS:
+            if self.test_type != TestType.OBJECT_PERMISSIONS:
                 self.skipTest("Authorization is not object based")
 
             mock.return_value = False
@@ -753,7 +744,7 @@ class BaseClass:
 
         @skipIfNotSubclass(DestroyModelMixin)
         def test_delete_configuration_not_authorized(self):
-            if not self.test_type == TestType.CONFIGURATION_PERMISSIONS:
+            if self.test_type != TestType.CONFIGURATION_PERMISSIONS:
                 self.skipTest("Authorization is not configuration based")
 
             self.setUp_not_authorized()
@@ -790,7 +781,7 @@ class BaseClass:
         @skipIfNotSubclass(UpdateModelMixin)
         @patch("dojo.api_v2.permissions.user_has_permission")
         def test_update_object_not_authorized(self, mock):
-            if not self.test_type == TestType.OBJECT_PERMISSIONS:
+            if self.test_type != TestType.OBJECT_PERMISSIONS:
                 self.skipTest("Authorization is not object based")
 
             mock.return_value = False
@@ -807,7 +798,7 @@ class BaseClass:
     class AuthenticatedViewTest(BaseClassTest):
         @skipIfNotSubclass(ListModelMixin)
         def test_list_configuration_not_authorized(self):
-            if not self.test_type == TestType.CONFIGURATION_PERMISSIONS:
+            if self.test_type != TestType.CONFIGURATION_PERMISSIONS:
                 self.skipTest("Authorization is not configuration based")
 
             self.setUp_not_authorized()
@@ -817,7 +808,7 @@ class BaseClass:
 
         @skipIfNotSubclass(RetrieveModelMixin)
         def test_detail_configuration_not_authorized(self):
-            if not self.test_type == TestType.CONFIGURATION_PERMISSIONS:
+            if self.test_type != TestType.CONFIGURATION_PERMISSIONS:
                 self.skipTest("Authorization is not configuration based")
 
             self.setUp_not_authorized()
@@ -1123,9 +1114,9 @@ class FilesTest(DojoAPITestCase):
 
     def test_request_response_post_and_download(self):
         # Test the creation
-        for level in self.url_levels.keys():
+        for level in self.url_levels:
             length = FileUpload.objects.count()
-            with open(f"{str(self.path)}/scans/acunetix/one_finding.xml", encoding="utf-8") as testfile:
+            with open(get_unit_tests_scans_path("acunetix") / "one_finding.xml", encoding="utf-8") as testfile:
                 payload = {
                     "title": level,
                     "file": testfile,
@@ -1137,7 +1128,7 @@ class FilesTest(DojoAPITestCase):
                 self.url_levels[level] = response.data.get("id")
 
         #  Test the download
-        file_data = Path(f"{str(self.path)}/scans/acunetix/one_finding.xml").read_text(encoding="utf-8")
+        file_data = (get_unit_tests_scans_path("acunetix") / "one_finding.xml").read_text(encoding="utf-8")
         for level, file_id in self.url_levels.items():
             response = self.client.get(f"/api/v2/{level}/files/download/{file_id}/")
             self.assertEqual(200, response.status_code)
@@ -1145,7 +1136,7 @@ class FilesTest(DojoAPITestCase):
             self.assertEqual(file_data, downloaded_file)
 
     def test_request_response_get(self):
-        for level in self.url_levels.keys():
+        for level in self.url_levels:
             response = self.client.get(f"/api/v2/{level}/files/")
             self.assertEqual(200, response.status_code)
 
@@ -2989,6 +2980,11 @@ class EngagementSurveyTest(BaseClass.BaseClassTest):
         self.deleted_objects = 5
         BaseClass.RESTEndpointTest.__init__(self, *args, **kwargs)
 
+    def test_link_engagement_questionnaire(self):
+        end_url = self.url + "4/link_engagement/2/"
+        result = self.client.post(end_url)
+        self.assertEqual(result.status_code, status.HTTP_200_OK, f"Failed to link enagement survey to engagement: {result.content} on {end_url}")
+
 
 class AnsweredSurveyTest(BaseClass.BaseClassTest):
     fixtures = ["questionnaire_testdata.json"]
@@ -3040,6 +3036,30 @@ class NotificationWebhooksTest(BaseClass.BaseClassTest):
         self.update_fields = {
             "header_name": "Auth",
             "header_value": "token x",
+        }
+        self.test_type = TestType.STANDARD
+        self.deleted_objects = 1
+        BaseClass.RESTEndpointTest.__init__(self, *args, **kwargs)
+
+
+class BurpRawRequestResponseTest(BaseClass.BaseClassTest):
+    fixtures = ["dojo_testdata.json"]
+
+    def __init__(self, *args, **kwargs):
+        self.endpoint_model = BurpRawRequestResponse
+        self.endpoint_path = "request_response_pairs"
+        self.viewname = "request_response_pairs"
+        self.viewset = BurpRawRequestResponseViewSet
+        self.payload = {
+            "finding": 2,
+            "burpRequestBase64": "cmVxdWVzdAo=",
+            "burpResponseBase64": "cmVzcG9uc2UK",
+        }
+
+        self.update_fields = {
+            "finding": 2,
+            "burpRequestBase64": "cmVxdWVzdCAtIGVkaXRlZAo=",
+            "burpResponseBase64": "cmVzcG9uc2UgLSBlZGl0ZWQK",
         }
         self.test_type = TestType.STANDARD
         self.deleted_objects = 1

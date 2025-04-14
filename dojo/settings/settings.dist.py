@@ -1,13 +1,7 @@
 #########################################################################################################
-# It is not allowed to edit file 'settings.dist.py', for production deployemnts.                        #
+# It is not recommended to edit file 'settings.dist.py', for production deployments.                        #
 # Any customization of variables need to be done via environmental variables or in 'local_settings.py'. #
 # For more information check https://documentation.defectdojo.com/getting_started/configuration/        #
-#########################################################################################################
-
-#########################################################################################################
-# If as a developer of a new feature, you need to perform an update of file 'settings.dist.py',         #
-# after the change, calculate the checksum and store it related file by calling the following command:  #
-# $ sha256sum settings.dist.py | cut -d ' ' -f1 > .settings.dist.py.sha256sum                           #
 #########################################################################################################
 
 # Django settings for DefectDojo
@@ -17,6 +11,7 @@ import os
 import warnings
 from datetime import timedelta
 from email.utils import getaddresses
+from pathlib import Path
 
 import environ
 from celery.schedules import crontab
@@ -109,6 +104,19 @@ env = environ.FileAwareEnv(
     DD_SOCIAL_AUTH_CREATE_USER=(bool, True),  # if True creates user at first login
     DD_SOCIAL_LOGIN_AUTO_REDIRECT=(bool, False),  # auto-redirect if there is only one social login method
     DD_SOCIAL_AUTH_TRAILING_SLASH=(bool, True),
+    DD_SOCIAL_AUTH_OIDC_AUTH_ENABLED=(bool, False),
+    DD_SOCIAL_AUTH_OIDC_OIDC_ENDPOINT=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_ID_KEY=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_KEY=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_SECRET=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_USERNAME_KEY=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_WHITELISTED_DOMAINS=(list, []),
+    DD_SOCIAL_AUTH_OIDC_JWT_ALGORITHMS=(list, ["RS256", "HS256"]),
+    DD_SOCIAL_AUTH_OIDC_ID_TOKEN_ISSUER=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_ACCESS_TOKEN_URL=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_AUTHORIZATION_URL=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_USERINFO_URL=(str, ""),
+    DD_SOCIAL_AUTH_OIDC_JWKS_URI=(str, ""),
     DD_SOCIAL_AUTH_AUTH0_OAUTH2_ENABLED=(bool, False),
     DD_SOCIAL_AUTH_AUTH0_KEY=(str, ""),
     DD_SOCIAL_AUTH_AUTH0_SECRET=(str, ""),
@@ -217,6 +225,9 @@ env = environ.FileAwareEnv(
     DD_MAX_REQRESP_FROM_API=(int, -1),
     DD_MAX_AUTOCOMPLETE_WORDS=(int, 20000),
     DD_JIRA_SSL_VERIFY=(bool, True),
+    # When interacting with jira tickets that attached finding groups, we should no be opening any findings
+    # on the DefectDojo side because jira has no way of knowing if a finding really should be reopened or not
+    DD_JIRA_WEBHOOK_ALLOW_FINDING_GROUP_REOPEN=(bool, False),
     # You can set extra Jira issue types via a simple env var that supports a csv format, like "Work Item,Vulnerability"
     DD_JIRA_EXTRA_ISSUE_TYPES=(str, ""),
     # if you want to keep logging to the console but in json format, change this here to 'json_console'
@@ -306,6 +317,9 @@ env = environ.FileAwareEnv(
     DD_NOTIFICATIONS_SYSTEM_LEVEL_TRUMP=(list, ["user_mentioned", "review_requested"]),
     # When enabled, force the password field to be required for creating/updating users
     DD_REQUIRE_PASSWORD_ON_USER=(bool, True),
+    # For HTTP requests, how long connection is open before timeout
+    # This settings apply only on requests performed by "requests" lib used in Dojo code (if some included lib is using "requests" as well, this does not apply there)
+    DD_REQUESTS_TIMEOUT=(int, 30),
 )
 
 
@@ -332,7 +346,7 @@ def generate_url(scheme, double_slashes, user, password, host, port, path, param
 
 
 # Read .env file as default or from the command line, DD_ENV_PATH
-if os.path.isfile(root("dojo/settings/.env.prod")) or "DD_ENV_PATH" in os.environ:
+if Path(root("dojo/settings/.env.prod")).is_file() or "DD_ENV_PATH" in os.environ:
     env.read_env(root("dojo/settings/" + env.str("DD_ENV_PATH", ".env.prod")))
 
 # ------------------------------------------------------------------------------
@@ -444,7 +458,7 @@ STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
-    os.path.join(os.path.dirname(DOJO_ROOT), "components", "node_modules"),
+    Path(DOJO_ROOT).parent / "components" / "node_modules",
 )
 
 # List of finder classes that know how to find static files in
@@ -486,6 +500,7 @@ LOGIN_URL = env("DD_LOGIN_URL")
 
 # These are the individidual modules supported by social-auth
 AUTHENTICATION_BACKENDS = (
+    "social_core.backends.open_id_connect.OpenIdConnectAuth",
     "social_core.backends.auth0.Auth0OAuth2",
     "social_core.backends.google.GoogleOAuth2",
     "social_core.backends.okta.OktaOAuth2",
@@ -545,8 +560,8 @@ SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = True
 GOOGLE_OAUTH_ENABLED = env("DD_SOCIAL_AUTH_GOOGLE_OAUTH2_ENABLED")
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = env("DD_SOCIAL_AUTH_GOOGLE_OAUTH2_KEY")
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = env("DD_SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET")
-SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_DOMAINS = env("DD_SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_DOMAINS")
-SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_EMAILS = env("DD_SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_EMAILS")
+SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_DOMAINS = tuple(env.list("DD_SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_DOMAINS", default=[""]))
+SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_EMAILS = tuple(env.list("DD_SOCIAL_AUTH_GOOGLE_OAUTH2_WHITELISTED_EMAILS", default=[""]))
 SOCIAL_AUTH_LOGIN_ERROR_URL = "/login"
 SOCIAL_AUTH_BACKEND_ERROR_URL = "/login"
 
@@ -577,6 +592,31 @@ SOCIAL_AUTH_GITLAB_SCOPE = env("DD_SOCIAL_AUTH_GITLAB_SCOPE")
 # Add required scope if auto import is enabled
 if GITLAB_PROJECT_AUTO_IMPORT:
     SOCIAL_AUTH_GITLAB_SCOPE += ["read_repository"]
+
+# Mandatory settings
+OIDC_AUTH_ENABLED = env("DD_SOCIAL_AUTH_OIDC_AUTH_ENABLED")
+SOCIAL_AUTH_OIDC_OIDC_ENDPOINT = env("DD_SOCIAL_AUTH_OIDC_OIDC_ENDPOINT")
+SOCIAL_AUTH_OIDC_KEY = env("DD_SOCIAL_AUTH_OIDC_KEY")
+SOCIAL_AUTH_OIDC_SECRET = env("DD_SOCIAL_AUTH_OIDC_SECRET")
+# Optional settings
+if value := env("DD_SOCIAL_AUTH_OIDC_ID_KEY"):
+    SOCIAL_AUTH_OIDC_ID_KEY = value
+if value := env("DD_SOCIAL_AUTH_OIDC_USERNAME_KEY"):
+    SOCIAL_AUTH_OIDC_USERNAME_KEY = value
+if value := env("DD_SOCIAL_AUTH_OIDC_WHITELISTED_DOMAINS"):
+    SOCIAL_AUTH_OIDC_WHITELISTED_DOMAINS = env("DD_SOCIAL_AUTH_OIDC_WHITELISTED_DOMAINS")
+if value := env("DD_SOCIAL_AUTH_OIDC_JWT_ALGORITHMS"):
+    SOCIAL_AUTH_OIDC_JWT_ALGORITHMS = env("DD_SOCIAL_AUTH_OIDC_JWT_ALGORITHMS")
+if value := env("DD_SOCIAL_AUTH_OIDC_ID_TOKEN_ISSUER"):
+    SOCIAL_AUTH_OIDC_ID_TOKEN_ISSUER = value
+if value := env("DD_SOCIAL_AUTH_OIDC_ACCESS_TOKEN_URL"):
+    SOCIAL_AUTH_OIDC_ACCESS_TOKEN_URL = value
+if value := env("DD_SOCIAL_AUTH_OIDC_AUTHORIZATION_URL"):
+    SOCIAL_AUTH_OIDC_AUTHORIZATION_URL = value
+if value := env("DD_SOCIAL_AUTH_OIDC_USERINFO_URL"):
+    SOCIAL_AUTH_OIDC_USERINFO_URL = value
+if value := env("DD_SOCIAL_AUTH_OIDC_JWKS_URI"):
+    SOCIAL_AUTH_OIDC_JWKS_URI = value
 
 AUTH0_OAUTH2_ENABLED = env("DD_SOCIAL_AUTH_AUTH0_OAUTH2_ENABLED")
 SOCIAL_AUTH_AUTH0_KEY = env("DD_SOCIAL_AUTH_AUTH0_KEY")
@@ -630,6 +670,7 @@ LOGIN_EXEMPT_URLS = (
     rf"^{URL_PREFIX}api/v2/",
     r"complete/",
     r"empty_questionnaire/([\d]+)/answer",
+    r"oauth2/idpresponse",
     rf"^{URL_PREFIX}password_reset/",
     rf"^{URL_PREFIX}forgot_username",
     rf"^{URL_PREFIX}reset/",
@@ -886,7 +927,7 @@ if env("DD_WHITENOISE"):
         # https://warehouse.python.org/project/whitenoise/
         "whitenoise.middleware.WhiteNoiseMiddleware",
     ]
-    MIDDLEWARE = MIDDLEWARE + WHITE_NOISE
+    MIDDLEWARE += WHITE_NOISE
 
 EMAIL_CONFIG = env.email_url(
     "DD_EMAIL_URL", default="smtp://user@:password@localhost:25")
@@ -903,10 +944,10 @@ vars().update(EMAIL_CONFIG)
 # https://djangosaml2.readthedocs.io/contents/setup.html#users-attributes-and-account-linking
 
 
-def saml2_attrib_map_format(dict):
+def saml2_attrib_map_format(din):
     dout = {}
-    for i in dict:
-        dout[i] = (dict[i],)
+    for i in din:
+        dout[i] = (din[i],)
     return dout
 
 
@@ -914,8 +955,6 @@ SAML2_ENABLED = env("DD_SAML2_ENABLED")
 SAML2_LOGIN_BUTTON_TEXT = env("DD_SAML2_LOGIN_BUTTON_TEXT")
 SAML2_LOGOUT_URL = env("DD_SAML2_LOGOUT_URL")
 if SAML2_ENABLED:
-    from os import path
-
     import saml2
     import saml2.saml
     # SSO_URL = env('DD_SSO_URL')
@@ -937,7 +976,7 @@ if SAML2_ENABLED:
     SAML_ATTRIBUTE_MAPPING = saml2_attrib_map_format(env("DD_SAML2_ATTRIBUTES_MAP"))
     SAML_FORCE_AUTH = env("DD_SAML2_FORCE_AUTH")
     SAML_ALLOW_UNKNOWN_ATTRIBUTES = env("DD_SAML2_ALLOW_UNKNOWN_ATTRIBUTE")
-    BASEDIR = path.dirname(path.abspath(__file__))
+    BASEDIR = Path(__file__).parent.absolute()
     if len(env("DD_SAML2_ENTITY_ID")) == 0:
         SAML2_ENTITY_ID = f"{SITE_URL}/saml2/metadata/"
     else:
@@ -951,7 +990,7 @@ if SAML2_ENABLED:
         "entityid": str(SAML2_ENTITY_ID),
 
         # directory with attribute mapping
-        "attribute_map_dir": path.join(BASEDIR, "attribute-maps"),
+        "attribute_map_dir": str(Path(BASEDIR) / "attribute-maps"),
         # do now discard attributes not specified in attribute-maps
         "allow_unknown_attributes": SAML_ALLOW_UNKNOWN_ATTRIBUTES,
         # this block states what services we provide
@@ -1149,6 +1188,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "dojo.notifications.helper.webhook_status_cleanup",
         "schedule": timedelta(minutes=1),
     },
+    "trigger_evaluate_pro_proposition": {
+        "task": "dojo.tasks.evaluate_pro_proposition",
+        "schedule": timedelta(hours=8),
+    },
+    "clear_sessions": {
+        "task": "dojo.tasks.clear_sessions",
+        "schedule": crontab(hour=0, minute=0, day_of_week=0),
+    },
     # 'jira_status_reconciliation': {
     #     'task': 'dojo.tasks.jira_status_reconciliation_task',
     #     'schedule': timedelta(hours=12),
@@ -1202,6 +1249,7 @@ HASHCODE_FIELDS_PER_SCANNER = {
     "Aqua Scan": ["severity", "vulnerability_ids", "component_name", "component_version"],
     "Bandit Scan": ["file_path", "line", "vuln_id_from_tool"],
     "Burp Enterprise Scan": ["title", "severity", "cwe"],
+    "Burp Scan": ["title", "severity", "vuln_id_from_tool"],
     "CargoAudit Scan": ["vulnerability_ids", "severity", "component_name", "component_version", "vuln_id_from_tool"],
     "Checkmarx Scan": ["cwe", "severity", "file_path"],
     "Checkmarx OSA": ["vulnerability_ids", "component_name"],
@@ -1213,7 +1261,8 @@ HASHCODE_FIELDS_PER_SCANNER = {
     "Dependency Check Scan": ["title", "cwe", "file_path"],
     "Dockle Scan": ["title", "description", "vuln_id_from_tool"],
     "Dependency Track Finding Packaging Format (FPF) Export": ["component_name", "component_version", "vulnerability_ids"],
-    "Mobsfscan Scan": ["title", "severity", "cwe"],
+    "Horusec Scan": ["title", "description", "file_path", "line"],
+    "Mobsfscan Scan": ["title", "severity", "cwe", "file_path", "description"],
     "Tenable Scan": ["title", "severity", "vulnerability_ids", "cwe", "description"],
     "Nexpose Scan": ["title", "severity", "vulnerability_ids", "cwe"],
     # possible improvement: in the scanner put the library name into file_path, then dedup on cwe + file_path + severity
@@ -1264,7 +1313,7 @@ HASHCODE_FIELDS_PER_SCANNER = {
     "NeuVector (compliance)": ["title", "vuln_id_from_tool", "description"],
     "Wpscan": ["title", "description", "severity"],
     "Popeye Scan": ["title", "description"],
-    "Nuclei Scan": ["title", "cwe", "severity"],
+    "Nuclei Scan": ["title", "cwe", "severity", "component_name"],
     "KubeHunter Scan": ["title", "description"],
     "kube-bench Scan": ["title", "vuln_id_from_tool", "description"],
     "Threagile risks report": ["title", "cwe", "severity"],
@@ -1272,8 +1321,10 @@ HASHCODE_FIELDS_PER_SCANNER = {
     "Humble Json Importer": ["title"],
     "MSDefender Parser": ["title", "description"],
     "HCLAppScan XML": ["title", "description"],
+    "HCL AppScan on Cloud SAST XML": ["title", "file_path", "line", "severity"],
     "KICS Scan": ["file_path", "line", "severity", "description", "title"],
     "MobSF Scan": ["title", "description", "severity"],
+    "MobSF Scorecard Scan": ["title", "description", "severity"],
     "OSV Scan": ["title", "description", "severity"],
     "Snyk Code Scan": ["vuln_id_from_tool", "file_path"],
     "Deepfence Threatmapper Report": ["title", "description", "severity"],
@@ -1288,14 +1339,23 @@ HASHCODE_FIELDS_PER_SCANNER = {
     "Legitify Scan": ["title", "endpoints", "severity"],
     "ThreatComposer Scan": ["title", "description"],
     "Invicti Scan": ["title", "description", "severity"],
+    "Checkmarx CxFlow SAST": ["vuln_id_from_tool", "file_path", "line"],
     "HackerOne Cases": ["title", "severity"],
     "KrakenD Audit Scan": ["description", "mitigation", "severity"],
+    "Red Hat Satellite": ["description", "severity"],
+    "Qualys Hacker Guardian Scan": ["title", "severity", "description"],
 }
 
 # Override the hardcoded settings here via the env var
 if len(env("DD_HASHCODE_FIELDS_PER_SCANNER")) > 0:
     env_hashcode_fields_per_scanner = json.loads(env("DD_HASHCODE_FIELDS_PER_SCANNER"))
     for key, value in env_hashcode_fields_per_scanner.items():
+        if not isinstance(value, list):
+            msg = f"Fields definition '{value}' for hashcode calculation of '{key}' is not valid. It needs to be list of strings but it is {type(value)}."
+            raise TypeError(msg)
+        if not all(isinstance(field, str) for field in value):
+            msg = f"Fields for hashcode calculation for {key} are not valid. It needs to be list of strings. Some of fields are not string."
+            raise AttributeError(msg)
         if key in HASHCODE_FIELDS_PER_SCANNER:
             logger.info(f"Replacing {key} with value {value} (previously set to {HASHCODE_FIELDS_PER_SCANNER[key]}) from env var DD_HASHCODE_FIELDS_PER_SCANNER")
             HASHCODE_FIELDS_PER_SCANNER[key] = value
@@ -1352,6 +1412,7 @@ HASHCODE_ALLOWS_NULL_CWE = {
     "Wazuh": True,
     "Nuclei Scan": True,
     "Threagile risks report": True,
+    "HCL AppScan on Cloud SAST XML": True,
     "AWS Inspector2 Scan": True,
 }
 
@@ -1376,6 +1437,13 @@ DEDUPE_ALGO_HASH_CODE = "hash_code"
 # unique_id_from_tool or hash_code
 # Makes it possible to deduplicate on a technical id (same parser) and also on some functional fields (cross-parsers deduplication)
 DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE = "unique_id_from_tool_or_hash_code"
+
+DEDUPE_ALGOS = [
+    DEDUPE_ALGO_LEGACY,
+    DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
+    DEDUPE_ALGO_HASH_CODE,
+    DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE,
+]
 
 # Allows to deduplicate with endpoints if endpoints is not included in the hashcode.
 # Possible values are: scheme, host, port, path, query, fragment, userinfo, and user. For a details description see https://hyperlink.readthedocs.io/en/latest/api.html#attributes.
@@ -1405,6 +1473,7 @@ DEDUPLICATION_ALGORITHM_PER_PARSER = {
     "Burp REST API": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "Bandit Scan": DEDUPE_ALGO_HASH_CODE,
     "Burp Enterprise Scan": DEDUPE_ALGO_HASH_CODE,
+    "Burp Scan": DEDUPE_ALGO_HASH_CODE,
     "CargoAudit Scan": DEDUPE_ALGO_HASH_CODE,
     "Checkmarx Scan detailed": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "Checkmarx Scan": DEDUPE_ALGO_HASH_CODE,
@@ -1416,6 +1485,7 @@ DEDUPLICATION_ALGORITHM_PER_PARSER = {
     "Cobalt.io API": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "Crunch42 Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "Dependency Track Finding Packaging Format (FPF) Export": DEDUPE_ALGO_HASH_CODE,
+    "Horusec Scan": DEDUPE_ALGO_HASH_CODE,
     "Mobsfscan Scan": DEDUPE_ALGO_HASH_CODE,
     "SonarQube Scan detailed": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "SonarQube Scan": DEDUPE_ALGO_HASH_CODE,
@@ -1503,8 +1573,10 @@ DEDUPLICATION_ALGORITHM_PER_PARSER = {
     "Wazuh Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
     "MSDefender Parser": DEDUPE_ALGO_HASH_CODE,
     "HCLAppScan XML": DEDUPE_ALGO_HASH_CODE,
+    "HCL AppScan on Cloud SAST XML": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE,
     "KICS Scan": DEDUPE_ALGO_HASH_CODE,
     "MobSF Scan": DEDUPE_ALGO_HASH_CODE,
+    "MobSF Scorecard Scan": DEDUPE_ALGO_HASH_CODE,
     "OSV Scan": DEDUPE_ALGO_HASH_CODE,
     "Nosey Parker Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE,
     "Bearer CLI": DEDUPE_ALGO_HASH_CODE,
@@ -1518,14 +1590,20 @@ DEDUPLICATION_ALGORITHM_PER_PARSER = {
     "Legitify Scan": DEDUPE_ALGO_HASH_CODE,
     "ThreatComposer Scan": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL_OR_HASH_CODE,
     "Invicti Scan": DEDUPE_ALGO_HASH_CODE,
+    "Checkmarx CxFlow SAST": DEDUPE_ALGO_HASH_CODE,
     "KrakenD Audit Scan": DEDUPE_ALGO_HASH_CODE,
     "PTART Report": DEDUPE_ALGO_UNIQUE_ID_FROM_TOOL,
+    "Red Hat Satellite": DEDUPE_ALGO_HASH_CODE,
+    "Qualys Hacker Guardian Scan": DEDUPE_ALGO_HASH_CODE,
 }
 
 # Override the hardcoded settings here via the env var
 if len(env("DD_DEDUPLICATION_ALGORITHM_PER_PARSER")) > 0:
     env_dedup_algorithm_per_parser = json.loads(env("DD_DEDUPLICATION_ALGORITHM_PER_PARSER"))
     for key, value in env_dedup_algorithm_per_parser.items():
+        if value not in DEDUPE_ALGOS:
+            msg = f"DEDUP algorithm '{value}' for '{key}' is not valid. Use one of following values: {', '.join(DEDUPE_ALGOS)}"
+            raise AttributeError(msg)
         if key in DEDUPLICATION_ALGORITHM_PER_PARSER:
             logger.info(f"Replacing {key} with value {value} (previously set to {DEDUPLICATION_ALGORITHM_PER_PARSER[key]}) from env var DD_DEDUPLICATION_ALGORITHM_PER_PARSER")
             DEDUPLICATION_ALGORITHM_PER_PARSER[key] = value
@@ -1557,6 +1635,7 @@ if env("DD_JIRA_EXTRA_ISSUE_TYPES") != "":
         JIRA_ISSUE_TYPE_CHOICES_CONFIG += ((extra_type, extra_type),)
 
 JIRA_SSL_VERIFY = env("DD_JIRA_SSL_VERIFY")
+JIRA_WEBHOOK_ALLOW_FINDING_GROUP_REOPEN = env("DD_JIRA_WEBHOOK_ALLOW_FINDING_GROUP_REOPEN")
 
 # ------------------------------------------------------------------------------
 # LOGGING
@@ -1658,10 +1737,6 @@ LOGGING = {
 # override filter to ensure sensitive variables are also hidden when DEBUG = True
 DEFAULT_EXCEPTION_REPORTER_FILTER = "dojo.settings.exception_filter.CustomExceptionReporterFilter"
 
-# As we require `innodb_large_prefix = ON` for MySQL, we can silence the
-# warning about large varchar with unique indices.
-SILENCED_SYSTEM_CHECKS = ["mysql.E001"]
-
 # Issue on benchmark : "The number of GET/POST parameters exceeded settings.DATA_UPLOAD_MAX_NUMBER_FIELD S"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10240
 
@@ -1727,26 +1802,50 @@ DELETE_PREVIEW = env("DD_DELETE_PREVIEW")
 SILENCED_SYSTEM_CHECKS = ["django_jsonfield_backport.W001"]
 
 VULNERABILITY_URLS = {
-    "CVE": "https://nvd.nist.gov/vuln/detail/",
-    "GHSA": "https://github.com/advisories/",
-    "OSV": "https://osv.dev/vulnerability/",
-    "PYSEC": "https://osv.dev/vulnerability/",
-    "SNYK": "https://snyk.io/vuln/",
-    "RUSTSEC": "https://rustsec.org/advisories/",
-    "VNS": "https://vulners.com/",
-    "RHSA": "https://access.redhat.com/errata/",
-    "RHBA": "https://access.redhat.com/errata/",
-    "RHEA": "https://access.redhat.com/errata/",
-    "FEDORA": "https://bodhi.fedoraproject.org/updates/",
-    "ALSA": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/ALSA-2024:0827
-    "USN": "https://ubuntu.com/security/notices/",  # e.g. https://ubuntu.com/security/notices/USN-6642-1
-    "DLA": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/DLA-3917-1
-    "ELSA": "https://linux.oracle.com/errata/&&.html",  # e.g. https://linux.oracle.com/errata/ELSA-2024-12714.html
-    "ELBA": "https://linux.oracle.com/errata/&&.html",  # e.g. https://linux.oracle.com/errata/ELBA-2024-7457.html
-    "RXSA": "https://errata.rockylinux.org/",  # e.g. https://errata.rockylinux.org/RXSA-2024:4928
+    "ALBA-": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/ALBA-2019:3411
+    "ALSA-": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/ALSA-2024:0827
+    "AVD": "https://avd.aquasec.com/misconfig/",  # e.g. https://avd.aquasec.com/misconfig/avd-ksv-01010
+    "BAM-": "https://jira.atlassian.com/browse/",  # e.g. https://jira.atlassian.com/browse/BAM-25498
+    "BSERV-": "https://jira.atlassian.com/browse/",  # e.g. https://jira.atlassian.com/browse/BSERV-19020
+    "C-": "https://hub.armosec.io/docs/",  # e.g. https://hub.armosec.io/docs/c-0085
     "CAPEC": "https://capec.mitre.org/data/definitions/&&.html",  # e.g. https://capec.mitre.org/data/definitions/157.html
+    "CGA-": "https://images.chainguard.dev/security/",  # e.g. https://images.chainguard.dev/security/CGA-24pq-h5fw-43v3
+    "CONFSERVER-": "https://jira.atlassian.com/browse/",  # e.g. https://jira.atlassian.com/browse/CONFSERVER-93361
+    "CVE-": "https://nvd.nist.gov/vuln/detail/",  # e.g. https://nvd.nist.gov/vuln/detail/cve-2022-22965
     "CWE": "https://cwe.mitre.org/data/definitions/&&.html",  # e.g. https://cwe.mitre.org/data/definitions/79.html
-    "TEMP": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/TEMP-0841856-B18BAF
+    "DLA-": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/DLA-3917-1
+    "DSA-": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/DSA-5791-1
+    "DTSA-": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/DTSA-41-1
+    "ELBA-": "https://linux.oracle.com/errata/&&.html",  # e.g. https://linux.oracle.com/errata/ELBA-2024-7457.html
+    "ELSA-": "https://linux.oracle.com/errata/&&.html",  # e.g. https://linux.oracle.com/errata/ELSA-2024-12714.html
+    "FEDORA-": "https://bodhi.fedoraproject.org/updates/",  # e.g. https://bodhi.fedoraproject.org/updates/FEDORA-EPEL-2024-06aa7dc422
+    "FG-IR-": "https://www.fortiguard.com/psirt/",  # e.g. https://www.fortiguard.com/psirt/FG-IR-24-373
+    "GHSA-": "https://github.com/advisories/",  # e.g. https://github.com/advisories/GHSA-58vj-cv5w-v4v6
+    "GLSA": "https://security.gentoo.org/",  # e.g. https://security.gentoo.org/glsa/202409-32
+    "JSDSERVER-": "https://jira.atlassian.com/browse/",  # e.g. https://jira.atlassian.com/browse/JSDSERVER-14872
+    "KHV": "https://avd.aquasec.com/misconfig/kubernetes/",  # e.g. https://avd.aquasec.com/misconfig/kubernetes/khv045
+    "MGAA-": "https://advisories.mageia.org/&&.html",  # e.g. https://advisories.mageia.org/MGAA-2013-0054.html
+    "MGASA-": "https://advisories.mageia.org/&&.html",  # e.g. https://advisories.mageia.org/MGASA-2025-0023.html
+    "OSV-": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/OSV-2024-1330
+    "PAN-SA-": "https://security.paloaltonetworks.com/",  # e.g. https://security.paloaltonetworks.com/PAN-SA-2024-0010
+    "PFPT-SA-": "https://www.proofpoint.com/us/security/security-advisories/",  # e.g. https://www.proofpoint.com/us/security/security-advisories/pfpt-sa-0002
+    "PMASA-": "https://www.phpmyadmin.net/security/",  # e.g. https://www.phpmyadmin.net/security/PMASA-2025-1
+    "PYSEC-": "https://osv.dev/vulnerability/",  # e.g. https://osv.dev/vulnerability/PYSEC-2024-48
+    "RHBA-": "https://access.redhat.com/errata/",  # e.g. https://access.redhat.com/errata/RHBA-2024:2406
+    "RHEA-": "https://access.redhat.com/errata/",  # e.g. https://access.redhat.com/errata/RHEA-2024:8857
+    "RHSA-": "https://access.redhat.com/errata/",  # e.g. https://access.redhat.com/errata/RHSA-2023:5616
+    "RLBA-": "https://errata.rockylinux.org/",  # e.g. https://errata.rockylinux.org/RLBA-2024:6968
+    "RLSA-": "https://errata.rockylinux.org/",  # e.g. https://errata.rockylinux.org/RLSA-2024:7001
+    "RUSTSEC-": "https://rustsec.org/advisories/",  # e.g. https://rustsec.org/advisories/RUSTSEC-2024-0432
+    "RXSA-": "https://errata.rockylinux.org/",  # e.g. https://errata.rockylinux.org/RXSA-2024:4928
+    "SNYK-": "https://snyk.io/vuln/",  # e.g. https://security.snyk.io/vuln/SNYK-JS-SOLANAWEB3JS-8453984
+    "SP-": "https://advisory.splunk.com/advisories/",  # e.g. https://advisory.splunk.com/advisories/SP-CAAANR7
+    "SUSE-SU-": "https://www.suse.com/support/update/announcement/",  # e.g. https://www.suse.com/support/update/announcement/2024/suse-su-20244196-1
+    "SVD-": "https://advisory.splunk.com/advisories/",  # e.g. https://advisory.splunk.com/advisories/SVD-2025-0103
+    "TEMP-": "https://security-tracker.debian.org/tracker/",  # e.g. https://security-tracker.debian.org/tracker/TEMP-0841856-B18BAF
+    "TYPO3-": "https://typo3.org/security/advisory/",  # e.g. https://typo3.org/security/advisory/typo3-core-sa-2025-010
+    "USN-": "https://ubuntu.com/security/notices/",  # e.g. https://ubuntu.com/security/notices/USN-6642-1
+    "VNS": "https://vulners.com/",
 }
 # List of acceptable file types that can be uploaded to a given object via arbitrary file upload
 FILE_UPLOAD_TYPES = env("DD_FILE_UPLOAD_TYPES")
@@ -1763,6 +1862,9 @@ CREATE_CLOUD_BANNER = env("DD_CREATE_CLOUD_BANNER")
 # ------------------------------------------------------------------------------
 AUDITLOG_FLUSH_RETENTION_PERIOD = env("DD_AUDITLOG_FLUSH_RETENTION_PERIOD")
 ENABLE_AUDITLOG = env("DD_ENABLE_AUDITLOG")
+AUDITLOG_TWO_STEP_MIGRATION = False
+AUDITLOG_USE_TEXT_CHANGES_IF_JSON_IS_NOT_PRESENT = False
+
 USE_FIRST_SEEN = env("DD_USE_FIRST_SEEN")
 USE_QUALYS_LEGACY_SEVERITY_PARSING = env("DD_QUALYS_LEGACY_SEVERITY_PARSING")
 
@@ -1770,6 +1872,11 @@ USE_QUALYS_LEGACY_SEVERITY_PARSING = env("DD_QUALYS_LEGACY_SEVERITY_PARSING")
 # Notifications
 # ------------------------------------------------------------------------------
 NOTIFICATIONS_SYSTEM_LEVEL_TRUMP = env("DD_NOTIFICATIONS_SYSTEM_LEVEL_TRUMP")
+
+# ------------------------------------------------------------------------------
+# Timeouts
+# ------------------------------------------------------------------------------
+REQUESTS_TIMEOUT = env("DD_REQUESTS_TIMEOUT")
 
 # ------------------------------------------------------------------------------
 # Ignored Warnings

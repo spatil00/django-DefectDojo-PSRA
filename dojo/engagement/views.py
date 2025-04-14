@@ -1,3 +1,5 @@
+import os
+import environ
 import csv
 import logging
 import mimetypes
@@ -29,7 +31,6 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 import dojo.jira_link.helper as jira_helper
-import dojo.notifications.helper as notifications_helper
 import dojo.risk_acceptance.helper as ra_helper
 import dojo.risk_assessment.helper as rassess_helper
 from dojo.authorization.authorization import user_has_permission_or_403
@@ -90,6 +91,7 @@ from dojo.models import (
     System_Settings,
     Test,
     Test_Import,
+    Product_File_Path
 )
 from dojo.notifications.helper import create_notification
 from dojo.product.queries import get_authorized_products
@@ -151,7 +153,7 @@ def engagement_calendar(request):
 
 def get_filtered_engagements(request, view):
 
-    if view not in ["all", "active"]:
+    if view not in {"all", "active"}:
         msg = f"View {view} is not allowed"
         raise ValidationError(msg)
 
@@ -320,10 +322,7 @@ def edit_engagement(request, eid):
             logger.debug("showing jira-epic-form")
             jira_epic_form = JIRAEngagementForm(instance=engagement)
 
-    if is_ci_cd:
-        title = "Edit CI/CD Engagement"
-    else:
-        title = "Edit Interactive Engagement"
+    title = "Edit CI/CD Engagement" if is_ci_cd else "Edit Interactive Engagement"
 
     product_tab = Product_Tab(engagement.product, title=title, tab="engagements")
     product_tab.setEngagement(engagement)
@@ -349,6 +348,11 @@ def delete_engagement(request, eid):
             form = DeleteEngagementForm(request.POST, instance=engagement)
             if form.is_valid():
                 product = engagement.product
+                
+                file_paths = Product_File_Path.objects.filter(product=product)
+                for file_path in file_paths:
+                    file_path.delete()  # Calls the overridden delete() method that removes files
+
                 if get_setting("ASYNC_OBJECT_DELETE"):
                     async_del = async_delete()
                     async_del.delete(engagement)
@@ -378,7 +382,6 @@ def delete_engagement(request, eid):
         "form": form,
         "rels": rels,
     })
-
 
 @user_is_authorized(Engagement, Permissions.Engagement_Edit, "eid")
 def copy_engagement(request, eid):
@@ -469,10 +472,7 @@ class ViewEngagement(View):
             available_note_types = find_available_notetypes(notes)
         form = DoneForm()
         files = eng.files.all()
-        if note_type_activation:
-            form = TypedNoteForm(available_note_types=available_note_types)
-        else:
-            form = NoteForm()
+        form = TypedNoteForm(available_note_types=available_note_types) if note_type_activation else NoteForm()
 
         creds = Cred_Mapping.objects.filter(
             product=eng.product).select_related("cred_id").order_by("cred_id")
@@ -555,10 +555,7 @@ class ViewEngagement(View):
             new_note.date = timezone.now()
             new_note.save()
             eng.notes.add(new_note)
-            if note_type_activation:
-                form = TypedNoteForm(available_note_types=available_note_types)
-            else:
-                form = NoteForm()
+            form = TypedNoteForm(available_note_types=available_note_types) if note_type_activation else NoteForm()
             title = f"Engagement: {eng.name} on {eng.product.name}"
             messages.add_message(request,
                                  messages.SUCCESS,
@@ -666,7 +663,15 @@ def add_tests(request, eid):
                 "Test added successfully.",
                 extra_tags="alert-success")
 
-            notifications_helper.notify_test_created(new_test)
+            create_notification(
+                event="test_added",
+                title=f"Test created for {new_test.engagement.product}: {new_test.engagement.name}: {new_test}",
+                test=new_test,
+                engagement=new_test.engagement,
+                product=new_test.engagement.product,
+                url=reverse("view_test", args=(new_test.id,)),
+                url_api=reverse("test-detail", args=(new_test.id,)),
+            )
 
             if "_Add Another Test" in request.POST:
                 return HttpResponseRedirect(
@@ -698,6 +703,7 @@ def add_tests(request, eid):
 class ImportScanResultsView(View):
     def get_template(self) -> str:
         """Returns the template that will be presented to the user"""
+        print("HERE AT THE SCAN TEMPLATE")
         return "dojo/import_scan_results.html"
 
     def get_development_environment(
@@ -709,6 +715,7 @@ class ImportScanResultsView(View):
         - GET: Environment "Development" by default
         - POST: The label supplied by the user, with Development as a backup
         """
+        print("CHECKING ENVIRONMENT")
         return Development_Environment.objects.filter(name=environment_name).first()
 
     def get_engagement_or_product(
@@ -928,15 +935,18 @@ class ImportScanResultsView(View):
             context["test"], _, finding_count, closed_finding_count, _, _, _ = importer_client.process_scan(
                 context.pop("scan", None),
             )
+
             # Add a message to the view for the user to see the results
             add_success_message_to_response(importer_client.construct_imported_message(
                 finding_count=finding_count,
                 closed_finding_count=closed_finding_count,
             ))
+                        
         except Exception as e:
-            logger.exception(e)
+            logger.exception("An exception error occurred during the report import")
             return f"An exception error occurred during the report import: {e}"
         return None
+
 
     def process_form(
         self,
@@ -945,6 +955,20 @@ class ImportScanResultsView(View):
         context: dict,
     ) -> str | None:
         """Process the form and manipulate the input in any way that is appropriate"""
+        uploaded_file = request.FILES.get("file")
+        # print(uploaded_file)
+        
+        # Save the file if it exists
+        if uploaded_file:
+            try:
+                saved_file_path = self.save_uploaded_file(
+                    uploaded_file, 
+                    context=context
+                )
+                # Optionally add the saved file path to the context for now
+                context['saved_file_path'] = saved_file_path
+            except Exception as e:
+                return f"Error saving file: {str(e)}"
         # Update the running context dict with cleaned form input
         context.update({
             "scan": request.FILES.get("file", None),
@@ -991,6 +1015,44 @@ class ImportScanResultsView(View):
             elif verifiedChoice == "force_to_false":
                 context["verified"] = False
         return None
+    
+
+    def save_uploaded_file(
+        self,
+        uploaded_file,
+        context: dict,
+    ):
+        """
+        Save the uploaded file to uploads directory in the project
+        with a folder named after the product_ID
+        """
+        root_path = environ.Path(__file__) - 3  # Three folders back
+        
+        if context.get("engagement"):
+            product = context.get("engagement").product
+            product_id = context.get("engagement").product_id
+            product_folder = f"product_{product_id}"
+        else:
+            product = None
+            product_folder = "unknown_product"
+        
+        base_upload_dir = root_path('uploads', 'scan_reports', product_folder)
+        os.makedirs(base_upload_dir, exist_ok=True)
+                
+        filename = f"RiskAssessment_{product_id}.xlsx"
+        
+        file_path = os.path.join(base_upload_dir, filename)
+        
+        with open(file_path, 'wb+') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+        
+        if product:
+            Product_File_Path.objects.create(product=product, product_file_path=file_path)
+
+        return file_path
+
+
 
     def process_jira_form(
         self,
@@ -1202,7 +1264,6 @@ def add_risk_assessment(request, eid, fid=None):
                 logger.exception(e)
                 raise
             
-            #TODO: Option for bulk risk assessment ?? might cause inconsistency better to do one by one ??
             findings = form.cleaned_data["assessed_findings"]
             risk_assessment = rassess_helper.add_findings_to_risk_assessment(request.user, risk_assessment,findings)
 
@@ -1245,6 +1306,7 @@ def add_risk_assessment(request, eid, fid=None):
 
 @user_is_authorized(Engagement, Permissions.Risk_Assessment, "eid")
 def view_risk_assessment(request, eid, raid):
+    print("EID: ", eid, " RAID: ", raid)
     return view_edit_risk_assessment(request, eid=eid, raid=raid, edit_mode=False)
 
 @user_is_authorized(Engagement, Permissions.Risk_Assessment, "eid")
@@ -1255,6 +1317,8 @@ def edit_risk_assessment(request, eid, fid):
 
 @user_is_authorized(Engagement, Permissions.Risk_Assessment, "eid")
 def view_edit_risk_assessment(request, eid, fid, edit_mode=False):
+    print("EID: ", eid, " FID: ", fid)
+
     finding = get_object_or_404(Finding, pk=fid)
     
     eng = get_object_or_404(Engagement, pk=eid)
@@ -1378,10 +1442,10 @@ def add_risk_acceptance(request, eid, fid=None):
                 # we sometimes see a weird exception here, but are unable to reproduce.
                 # we add some logging in case it happens
                 risk_acceptance = form.save()
-            except Exception as e:
+            except Exception:
                 logger.debug(vars(request.POST))
                 logger.error(vars(form))
-                logger.exception(e)
+                logger.exception("Creation of Risk Acc. is not possible")
                 raise
 
             # attach note to risk acceptance object now in database
@@ -1431,7 +1495,7 @@ def edit_risk_acceptance(request, eid, raid):
 
 
 # will only be called by view_risk_acceptance and edit_risk_acceptance
-def view_edit_risk_acceptance(request, eid, raid, edit_mode=False):
+def view_edit_risk_acceptance(request, eid, raid, *, edit_mode=False):
     risk_acceptance = get_object_or_404(Risk_Acceptance, pk=raid)
     eng = get_object_or_404(Engagement, pk=eid)
 
@@ -1545,9 +1609,8 @@ def view_edit_risk_acceptance(request, eid, raid, edit_mode=False):
             return redirect_to_return_url_or_else(request, reverse("view_risk_acceptance", args=(eid, raid)))
         logger.error("errors found")
 
-    else:
-        if edit_mode:
-            risk_acceptance_form = EditRiskAcceptanceForm(instance=risk_acceptance)
+    elif edit_mode:
+        risk_acceptance_form = EditRiskAcceptanceForm(instance=risk_acceptance)
 
     note_form = NoteForm()
     replace_form = ReplaceRiskAcceptanceProofForm(instance=risk_acceptance)
@@ -1716,9 +1779,9 @@ def engagement_ics(request, eid):
     return response
 
 
-def get_list_index(list, index):
+def get_list_index(full_list, index):
     try:
-        element = list[index]
+        element = full_list[index]
     except Exception:
         element = None
     return element
@@ -1738,7 +1801,7 @@ def get_engagements(request):
         raise ValidationError(msg)
 
     view = query = None
-    if get_list_index(path_items, 1) in ["active", "all"]:
+    if get_list_index(path_items, 1) in {"active", "all"}:
         view = get_list_index(path_items, 1)
         query = get_list_index(path_items, 2)
     else:
@@ -1762,6 +1825,7 @@ def get_foreign_keys():
 
 
 def csv_export(request):
+    logger.debug("starting csv export")
     engagements, test_counts = get_engagements(request)
 
     response = HttpResponse(content_type="text/csv")
@@ -1794,11 +1858,12 @@ def csv_export(request):
             fields.append(test_counts.get(engagement.id, 0))
 
             writer.writerow(fields)
-
+    logger.debug("done with csv export")
     return response
 
 
 def excel_export(request):
+    logger.debug("starting excel export")
     engagements, test_counts = get_engagements(request)
 
     workbook = Workbook()
@@ -1844,7 +1909,8 @@ def excel_export(request):
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     response["Content-Disposition"] = "attachment; filename=engagements.xlsx"
+    logger.debug("done with excel export")
     return response
 
-def psra_excel_report():
+def psra_excel_report(request):
     pass

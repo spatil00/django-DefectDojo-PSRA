@@ -14,6 +14,7 @@ from dojo.announcement.urls import urlpatterns as announcement_urls
 from dojo.api_v2.views import (
     AnnouncementViewSet,
     AppAnalysisViewSet,
+    BurpRawRequestResponseViewSet,
     ConfigurationPermissionViewSet,
     CredentialsMappingViewSet,
     CredentialsViewSet,
@@ -120,7 +121,7 @@ v2_api = DefaultRouter()
 v2_api.register(r"announcements", AnnouncementViewSet, basename="announcement")
 v2_api.register(r"configuration_permissions", ConfigurationPermissionViewSet, basename="permission")
 v2_api.register(r"credential_mappings", CredentialsMappingViewSet, basename="cred_mapping")
-v2_api.register(r"credentials", CredentialsViewSet, basename="cred_user")
+v2_api.register(r"credentia ls", CredentialsViewSet, basename="cred_user")
 v2_api.register(r"development_environments", DevelopmentEnvironmentViewSet, basename="development_environment")
 v2_api.register(r"dojo_groups", DojoGroupViewSet, basename="dojo_group")
 v2_api.register(r"dojo_group_members", DojoGroupMemberViewSet, basename="dojo_group_member")
@@ -156,6 +157,7 @@ v2_api.register(r"product_type_members", ProductTypeMemberViewSet, basename="pro
 v2_api.register(r"product_type_groups", ProductTypeGroupViewSet, basename="product_type_group")
 v2_api.register(r"regulations", RegulationsViewSet, basename="regulations")
 v2_api.register(r"reimport-scan", ReImportScanView, basename="reimportscan")
+v2_api.register(r"request_response_pairs", BurpRawRequestResponseViewSet, basename="request_response_pairs")
 v2_api.register(r"risk_acceptance", RiskAcceptanceViewSet, basename="risk_acceptance")
 v2_api.register(r"roles", RoleViewSet, basename="role")
 v2_api.register(r"sla_configurations", SLAConfigurationViewset, basename="sla_configurations")

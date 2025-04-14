@@ -6,7 +6,6 @@ from django.db.models.query_utils import Q
 
 import dojo.finding.helper as finding_helper
 import dojo.jira_link.helper as jira_helper
-import dojo.notifications.helper as notifications_helper
 from dojo.importers.base_importer import BaseImporter, Parser
 from dojo.importers.options import ImporterOptions
 from dojo.models import (
@@ -128,11 +127,13 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
         updated_count = (
             len(closed_findings) + len(reactivated_findings) + len(new_findings)
         )
-        notifications_helper.notify_scan_added(
+        self.notify_scan_added(
             self.test,
             updated_count,
             new_findings=new_findings,
+            findings_reactivated=reactivated_findings,
             findings_mitigated=closed_findings,
+            findings_untouched=untouched_findings,
         )
         # Update the test progress to reflect that the import has completed
         logger.debug("REIMPORT_SCAN: Updating Test progress")
@@ -147,13 +148,6 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
             len(untouched_findings),
             test_import_history,
         )
-
-    def determine_deduplication_algorithm(self) -> str:
-        """
-        Determines what dedupe algorithm to use for the Test being processed.
-        :return: A string representing the dedupe algorithm to use.
-        """
-        return self.test.deduplication_algorithm
 
     def process_findings(
         self,
@@ -415,7 +409,7 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
             # this is left as is for simplicity.
             # Re-writing the legacy deduplication here would be complicated and counter-productive.
             # If you have use cases going through this section, you're advised to create a deduplication configuration for your parser
-            logger.debug("Legacy reimport. In case of issue, you're advised to create a deduplication configuration in order not to go through this section")
+            logger.warning("Legacy reimport. In case of issue, you're advised to create a deduplication configuration in order not to go through this section")
             return Finding.objects.filter(
                     title=unsaved_finding.title,
                     test=self.test,
@@ -738,7 +732,7 @@ class DefaultReImporter(BaseImporter, DefaultReImporterOptions):
         Determine how to to return the results based on whether the process was
         ran asynchronous or not
         """
-        if not kwargs.get("sync", False):
+        if not kwargs.get("sync"):
             serialized_new_items = [
                 serialize("json", [finding]) for finding in self.new_items
             ]

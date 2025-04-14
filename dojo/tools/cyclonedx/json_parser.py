@@ -115,22 +115,19 @@ class CycloneDXJSONParser:
                     state = analysis.get("state")
                     if state:
                         if (
-                            "resolved" == state
-                            or "resolved_with_pedigree" == state
-                            or "not_affected" == state
+                            state == "resolved"
+                            or state == "resolved_with_pedigree"
+                            or state == "not_affected"
                         ):
                             finding.is_mitigated = True
                             finding.active = False
-                        elif "false_positive" == state:
+                        elif state == "false_positive":
                             finding.false_p = True
                             finding.active = False
                         if not finding.active:
                             detail = analysis.get("detail")
                             if detail:
-                                finding.mitigation = (
-                                    finding.mitigation
-                                    + f"\n**This vulnerability is mitigated and/or suppressed:** {detail}\n"
-                                )
+                                finding.mitigation += f"\n**This vulnerability is mitigated and/or suppressed:** {detail}\n"
                 findings.append(finding)
         return findings
 

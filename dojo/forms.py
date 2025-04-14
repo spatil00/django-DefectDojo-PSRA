@@ -4,6 +4,7 @@ import pickle
 import re
 import warnings
 from datetime import date, datetime
+from pathlib import Path
 
 import tagulous
 from crispy_forms.bootstrap import InlineCheckboxes, InlineRadios
@@ -155,7 +156,7 @@ class MonthYearWidget(Widget):
     month_field = "%s_month"
     year_field = "%s_year"
 
-    def __init__(self, attrs=None, years=None, required=True):
+    def __init__(self, attrs=None, years=None, *, required=True):
         # years is an optional list/tuple of years to use in the
         # "year" select box.
         self.attrs = attrs or {}
@@ -178,10 +179,7 @@ class MonthYearWidget(Widget):
 
         output = []
 
-        if "id" in self.attrs:
-            id_ = self.attrs["id"]
-        else:
-            id_ = f"id_{name}"
+        id_ = self.attrs.get("id", f"id_{name}")
 
         month_choices = list(MONTHS.items())
         if not (self.required and value):
@@ -203,10 +201,9 @@ class MonthYearWidget(Widget):
 
         return mark_safe("\n".join(output))
 
-    def id_for_label(self, id_):
+    @classmethod
+    def id_for_label(cls, id_):
         return f"{id_}_month"
-
-    id_for_label = classmethod(id_for_label)
 
     def value_from_datadict(self, data, files, name):
         y = data.get(self.year_field % name)
@@ -331,8 +328,10 @@ class ProductForm(forms.ModelForm):
         # if this product has findings being asynchronously updated, disable the sla config field
         if self.instance.async_updating:
             self.fields["sla_configuration"].disabled = True
-            self.fields["sla_configuration"].widget.attrs["message"] = "Finding SLA expiration dates are currently being recalculated. " + \
-                                                                       "This field cannot be changed until the calculation is complete."
+            self.fields["sla_configuration"].widget.attrs["message"] = (
+                "Finding SLA expiration dates are currently being recalculated. "
+                "This field cannot be changed until the calculation is complete."
+            )
 
     class Meta:
         model = Product
@@ -580,6 +579,27 @@ class ImportScanForm(forms.Form):
 
         self.endpoints_to_add_list = []
 
+    def save_uploaded_file(self, file):
+        # Define the base directory where files will be saved
+        # You can customize this path as needed
+        base_upload_dir = os.path.join(settings.BASE_DIR, 'uploads', 'scan_reports')
+        
+        # Create the directory if it doesn't exist
+        os.makedirs(base_upload_dir, exist_ok=True)
+        
+        # Generate a unique filename (you might want to add more sophisticated naming)
+        filename = f"{timezone.now().strftime('%Y%m%d_%H%M%S')}_{file.name}"
+        
+        # Full path for the file
+        file_path = os.path.join(base_upload_dir, filename)
+        
+        # Save the file
+        with open(file_path, 'wb+') as destination:
+            for chunk in file.chunks():
+                destination.write(chunk)
+        
+        return file_path
+
     def clean(self):
         cleaned_data = super().clean()
         scan_type = cleaned_data.get("scan_type")
@@ -601,6 +621,15 @@ class ImportScanForm(forms.Form):
         if errors:
             raise forms.ValidationError(errors)
         self.endpoints_to_add_list = endpoints_to_add_list
+
+        # if file:
+        #     # Optional: Add additional file handling or validation
+        #     try:
+        #         saved_file_path = self.save_uploaded_file(file)
+        #         # You can store the path in the cleaned_data if needed
+        #         cleaned_data['saved_file_path'] = saved_file_path
+        #     except Exception as e:
+        #         raise forms.ValidationError(f"Error saving file: {str(e)}")
 
         return cleaned_data
 
@@ -755,7 +784,8 @@ class UploadThreatForm(forms.Form):
 
     def clean(self):
         if (file := self.cleaned_data.get("file", None)) is not None:
-            ext = os.path.splitext(file.name)[1]  # [0] returns path+filename
+            path = Path(file.name)
+            ext = path.suffix
             valid_extensions = [".jpg", ".png", ".pdf"]
             if ext.lower() not in valid_extensions:
                 if accepted_extensions := f"{', '.join(valid_extensions)}":
@@ -869,6 +899,9 @@ class RiskAssessmentForm(EditRiskAssessmentForm):
         model = Risk_Assessment
         fields = ['name', 'finding_description', 'vulnerability_cause','assessed_findings',
                   'vector_string','threat_types', 'threat_description','risk_statement','finding_mitigation','mitigation_types','mitigation_reference','accept_risk','rational_and_actions', 'related_hazard_item']
+        widgets = {
+            'vector_string': forms.HiddenInput(),
+        }
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -927,6 +960,8 @@ class RiskAcceptanceForm(EditRiskAcceptanceForm):
             self.fields["expiration_date"].initial = expiration_date
         # self.fields['path'].help_text = 'Existing proof uploaded: %s' % self.instance.filename() if self.instance.filename() else 'None'
         self.fields["accepted_findings"].queryset = get_authorized_findings(Permissions.Risk_Acceptance)
+        if disclaimer := get_system_setting("disclaimer_notes"):
+            self.disclaimer = disclaimer.strip()
 
 
 class BaseManageFileFormSet(forms.BaseModelFormSet):
@@ -938,7 +973,8 @@ class BaseManageFileFormSet(forms.BaseModelFormSet):
         for form in self.forms:
             file = form.cleaned_data.get("file", None)
             if file:
-                ext = os.path.splitext(file.name)[1]  # [0] returns path+filename
+                path = Path(file.name)
+                ext = path.suffix
                 valid_extensions = settings.FILE_UPLOAD_TYPES
                 if ext.lower() not in valid_extensions:
                     if accepted_extensions := f"{', '.join(valid_extensions)}":
@@ -1018,8 +1054,10 @@ class CheckForm(forms.ModelForm):
 class EngForm(forms.ModelForm):
     name = forms.CharField(
         max_length=300, required=False,
-        help_text="Add a descriptive name to identify this engagement. "
-                  + "Without a name the target start date will be set.")
+        help_text=(
+            "Add a descriptive name to identify this engagement. "
+            "Without a name the target start date will be set."
+        ))
     description = forms.CharField(widget=forms.Textarea(attrs={}),
                                   required=False, help_text="Description of the engagement and details regarding the engagement.")
     product = forms.ModelChoiceField(label="Product",
@@ -1435,11 +1473,10 @@ class FindingForm(forms.ModelForm):
         # when adding from template, we don't have access to the test. quickfix for now to just hide simple risk acceptance
         if not hasattr(self.instance, "test") or (not self.instance.risk_accepted and not self.instance.test.engagement.product.enable_simple_risk_acceptance):
             del self.fields["risk_accepted"]
-        else:
-            if self.instance.risk_accepted:
-                self.fields["risk_accepted"].help_text = "Uncheck to unaccept the risk. Use full risk acceptance from the dropdown menu if you need advanced settings such as an expiry date."
-            elif self.instance.test.engagement.product.enable_simple_risk_acceptance:
-                self.fields["risk_accepted"].help_text = "Check to accept the risk. Use full risk acceptance from the dropdown menu if you need advanced settings such as an expiry date."
+        elif self.instance.risk_accepted:
+            self.fields["risk_accepted"].help_text = "Uncheck to unaccept the risk. Use full risk acceptance from the dropdown menu if you need advanced settings such as an expiry date."
+        elif self.instance.test.engagement.product.enable_simple_risk_acceptance:
+            self.fields["risk_accepted"].help_text = "Check to accept the risk. Use full risk acceptance from the dropdown menu if you need advanced settings such as an expiry date."
 
         # self.fields['tags'].widget.choices = t
         if req_resp:
@@ -1635,6 +1672,8 @@ class FindingBulkUpdateForm(forms.ModelForm):
         self.fields["severity"].required = False
         # we need to defer initialization to prevent multiple initializations if other forms are shown
         self.fields["tags"].widget.tag_options = tagulous.models.options.TagOptions(autocomplete_settings={"width": "200px", "defer": True})
+        if disclaimer := get_system_setting("disclaimer_notes"):
+            self.disclaimer = disclaimer.strip()
 
     def clean(self):
         cleaned_data = super().clean()
@@ -1778,6 +1817,11 @@ class NoteForm(forms.ModelForm):
         model = Notes
         fields = ["entry", "private"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if disclaimer := get_system_setting("disclaimer_notes"):
+            self.disclaimer = disclaimer.strip()
+
 
 class TypedNoteForm(NoteForm):
 
@@ -1829,6 +1873,8 @@ class CloseFindingForm(forms.ModelForm):
             self.fields["mitigated_by"].queryset = get_authorized_users(Permissions.Test_Edit)
             self.fields["mitigated"].initial = self.instance.mitigated
             self.fields["mitigated_by"].initial = self.instance.mitigated_by
+        if disclaimer := get_system_setting("disclaimer_notes"):
+            self.disclaimer = disclaimer.strip()
 
     def _post_clean(self):
         super()._post_clean()
@@ -1881,6 +1927,11 @@ class DefectFindingForm(forms.ModelForm):
         model = Notes
         fields = ["entry"]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if disclaimer := get_system_setting("disclaimer_notes"):
+            self.disclaimer = disclaimer.strip()
+
 
 class ClearFindingReviewForm(forms.ModelForm):
     entry = forms.CharField(
@@ -1894,6 +1945,11 @@ class ClearFindingReviewForm(forms.ModelForm):
     class Meta:
         model = Finding
         fields = ["active", "verified", "false_p", "out_of_scope", "duplicate", "is_mitigated"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if disclaimer := get_system_setting("disclaimer_notes"):
+            self.disclaimer = disclaimer.strip()
 
 
 class ReviewFindingForm(forms.Form):
@@ -1932,6 +1988,8 @@ class ReviewFindingForm(forms.Form):
         self.reviewer_queryset = users
         # Set the users in the form
         self.fields["reviewers"].choices = self._get_choices(self.reviewer_queryset)
+        if disclaimer := get_system_setting("disclaimer_notes"):
+            self.disclaimer = disclaimer.strip()
 
     @staticmethod
     def _get_choices(queryset):
@@ -2017,9 +2075,7 @@ class MetricsFilterForm(forms.Form):
 
     # add the ability to exclude the exclude_product_types field
     def __init__(self, *args, **kwargs):
-        exclude_product_types = kwargs.get("exclude_product_types", False)
-        if "exclude_product_types" in kwargs:
-            del kwargs["exclude_product_types"]
+        exclude_product_types = kwargs.pop("exclude_product_types", False)
         super().__init__(*args, **kwargs)
         if exclude_product_types:
             del self.fields["exclude_product_types"]
@@ -2371,6 +2427,13 @@ class ReportOptionsForm(forms.Form):
     include_disclaimer = forms.ChoiceField(choices=yes_no, label="Disclaimer")
     report_type = forms.ChoiceField(choices=(("HTML", "HTML"),))
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if get_system_setting("disclaimer_reports_forced"):
+            self.fields["include_disclaimer"].disabled = True
+            self.fields["include_disclaimer"].initial = "1"  # represents yes
+            self.fields["include_disclaimer"].help_text = "Administrator of the system enforced placement of disclaimer in all reports. You are not able exclude disclaimer from this report."
+
 
 class CustomReportOptionsForm(forms.Form):
     yes_no = (("0", "No"), ("1", "Yes"))
@@ -2466,7 +2529,7 @@ def get_jira_issue_template_dir_choices():
 
         for dirname in dirnames:
             clean_base_dir = base_dir.removeprefix(settings.TEMPLATE_DIR_PREFIX)
-            template_dir_list.append((os.path.join(clean_base_dir, dirname), dirname))
+            template_dir_list.append((str(Path(clean_base_dir) / dirname), dirname))
 
     logger.debug("templates: %s", template_dir_list)
     return template_dir_list
@@ -2601,7 +2664,7 @@ class ToolTypeForm(forms.ModelForm):
         exclude = ["product"]
 
     def __init__(self, *args, **kwargs):
-        instance = kwargs.get("instance", None)
+        instance = kwargs.get("instance")
         self.newly_created = True
         if instance is not None:
             self.newly_created = instance.pk is None
@@ -2678,8 +2741,10 @@ class SLAConfigForm(forms.ModelForm):
 
         # if this sla config has findings being asynchronously updated, disable the days by severity fields
         if self.instance.async_updating:
-            msg = "Finding SLA expiration dates are currently being recalculated. " + \
-                  "This field cannot be changed until the calculation is complete."
+            msg = (
+                "Finding SLA expiration dates are currently being recalculated. "
+                "This field cannot be changed until the calculation is complete."
+            )
             self.fields["critical"].disabled = True
             self.fields["enforce_critical"].disabled = True
             self.fields["critical"].widget.attrs["message"] = msg
@@ -2805,6 +2870,11 @@ class EngagementPresetsForm(forms.ModelForm):
     class Meta:
         model = Engagement_Presets
         exclude = ["product"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if disclaimer := get_system_setting("disclaimer_notes"):
+            self.disclaimer = disclaimer.strip()
 
 
 class DeleteEngagementPresetsForm(forms.ModelForm):
@@ -3096,9 +3166,10 @@ class JIRAFindingForm(forms.Form):
         if self.push_all:
             # This will show the checkbox as checked and greyed out, this way the user is aware
             # that issues will be pushed to JIRA, given their product-level settings.
-            self.fields["push_to_jira"].help_text = \
-                "Push all issues is enabled on this product. If you do not wish to push all issues" \
+            self.fields["push_to_jira"].help_text = (
+                "Push all issues is enabled on this product. If you do not wish to push all issues"
                 " to JIRA, please disable Push all issues on this product."
+            )
             self.fields["push_to_jira"].widget.attrs["checked"] = "checked"
             self.fields["push_to_jira"].disabled = True
 
@@ -3142,7 +3213,7 @@ class JIRAFindingForm(forms.Form):
         elif self.cleaned_data.get("push_to_jira", None):
             active = self.finding_form["active"].value()
             verified = self.finding_form["verified"].value()
-            if not active or (not verified and get_system_setting("enforce_verified_status", True)):
+            if not active or (not verified and (get_system_setting("enforce_verified_status", True) or get_system_setting("enforce_verified_status_jira", True))):
                 logger.debug("Findings must be active and verified to be pushed to JIRA")
                 error_message = "Findings must be active and verified to be pushed to JIRA"
                 self.add_error("push_to_jira", ValidationError(error_message, code="not_active_or_verified"))
@@ -3199,9 +3270,10 @@ class JIRAImportScanForm(forms.Form):
         if self.push_all:
             # This will show the checkbox as checked and greyed out, this way the user is aware
             # that issues will be pushed to JIRA, given their product-level settings.
-            self.fields["push_to_jira"].help_text = \
-                "Push all issues is enabled on this product. If you do not wish to push all issues" \
+            self.fields["push_to_jira"].help_text = (
+                "Push all issues is enabled on this product. If you do not wish to push all issues"
                 " to JIRA, please disable Push all issues on this product."
+            )
             self.fields["push_to_jira"].widget.attrs["checked"] = "checked"
             self.fields["push_to_jira"].disabled = True
 
@@ -3274,10 +3346,7 @@ class QuestionForm(forms.Form):
         self.helper.form_method = "post"
 
         # If true crispy-forms will render a <form>..</form> tags
-        self.helper.form_tag = kwargs.get("form_tag", True)
-
-        if "form_tag" in kwargs:
-            del kwargs["form_tag"]
+        self.helper.form_tag = kwargs.pop("form_tag", True)
 
         self.engagement_survey = kwargs.get("engagement_survey")
 
@@ -3289,13 +3358,12 @@ class QuestionForm(forms.Form):
 
         self.helper.form_class = kwargs.get("form_class", "")
 
-        self.question = kwargs.get("question")
+        self.question = kwargs.pop("question", None)
 
         if not self.question:
             msg = "Need a question to render"
             raise ValueError(msg)
 
-        del kwargs["question"]
         super().__init__(*args, **kwargs)
 
 
@@ -3310,10 +3378,7 @@ class TextQuestionForm(QuestionForm):
             question=self.question,
         )
 
-        if initial_answer.exists():
-            initial_answer = initial_answer[0].answer
-        else:
-            initial_answer = ""
+        initial_answer = initial_answer[0].answer if initial_answer.exists() else ""
 
         self.fields["answer"] = forms.CharField(
             label=self.question.text,
@@ -3709,12 +3774,11 @@ class ConfigurationPermissionsForm(forms.Form):
             else:
                 msg = "Neither user or group are set"
                 raise Exception(msg)
+        # Checkbox is unset
+        elif self.user:
+            self.user.user_permissions.remove(self.permissions[codename])
+        elif self.group:
+            self.group.auth_group.permissions.remove(self.permissions[codename])
         else:
-            # Checkbox is unset
-            if self.user:
-                self.user.user_permissions.remove(self.permissions[codename])
-            elif self.group:
-                self.group.auth_group.permissions.remove(self.permissions[codename])
-            else:
-                msg = "Neither user or group are set"
-                raise Exception(msg)
+            msg = "Neither user or group are set"
+            raise Exception(msg)

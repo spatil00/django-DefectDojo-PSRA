@@ -8,6 +8,46 @@ class GitleaksParser:
 
     """A class that can be used to parse the Gitleaks JSON report files"""
 
+    def get_fields(self) -> list[str]:
+        """
+        Return the list of fields used in the Gitleaks Parser.
+
+        Fields:
+        - title: Made using issue rule and filepath from Gitleaks Scanner.
+        - description: Custom description made from commit details.
+        - severity: Set to high and inccreased to critical if "Github", "AWS", or "Heroku" are in the isssue rule.
+        - file_path: Set to issuel file from Gitleaks Scanner.
+        - line: Set to line number from Gitleaks Scanner.
+        - nb_occurences: Inittially set to 1 and incremented based on number of occurences.
+        """
+        return [
+            "title",
+            "description",
+            "severity",
+            "file_path",
+            "line",
+            "nb_occurences",
+        ]
+
+    def get_dedupe_fields(self) -> list[str]:
+        """
+        Return the list of fields used for deduplication in the Gitleaks Parser.
+
+        Fields:
+        - title: Made using issue rule and filepath from Gitleaks Scanner.
+        - line: Set to line number from Gitleaks Scanner.
+        - file_path: Set to issuel file from Gitleaks Scanner.
+        - description: Custom description made from commit details.
+
+        NOTE: uses legacy dedupe: ['title', 'cwe', 'line', 'file_path', 'description']
+        """
+        return [
+            "title",
+            "line",
+            "file_path",
+            "description",
+        ]
+
     def get_scan_types(self):
         return ["Gitleaks Scan"]
 
@@ -104,10 +144,7 @@ class GitleaksParser:
     def get_finding_current(self, issue, test, dupes):
         reason = issue.get("Description")
         line = issue.get("StartLine")
-        if line:
-            line = int(line)
-        else:
-            line = 0
+        line = int(line) if line else 0
         match = issue.get("Match")
         secret = issue.get("Secret")
         file_path = issue.get("File")
@@ -131,7 +168,7 @@ class GitleaksParser:
             if len(message.split("\n")) > 1:
                 description += (
                     "**Commit message:**"
-                    + "\n```\n"
+                    "\n```\n"
                     + message.replace("```", "\\`\\`\\`")
                     + "\n```\n"
                 )

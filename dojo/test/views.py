@@ -1,4 +1,6 @@
 # #  tests
+import os
+import environ
 import base64
 import logging
 import operator
@@ -56,6 +58,7 @@ from dojo.models import (
     Test,
     Test_Import,
     Test_Import_Finding_Action,
+    Product_File_Path
 )
 from dojo.notifications.helper import create_notification
 from dojo.test.queries import get_authorized_tests
@@ -142,15 +145,47 @@ class ViewTest(View):
 
     def get_findings(self, request: HttpRequest, test: Test):
         findings = Finding.objects.filter(test=test).order_by("numerical_severity")
+
         filter_string_matching = get_system_setting("filter_string_matching", False)
         finding_filter_class = FindingFilterWithoutObjectLookups if filter_string_matching else FindingFilter
         findings = finding_filter_class(request.GET, queryset=findings)
         paged_findings = get_page_items_and_count(request, prefetch_for_findings(findings.qs), 25, prefix="findings")
 
+        # for finding in findings.qs:
+        #     print(f"Finding: {finding}")
+
+        #     if finding.risk:
+        #         risk = finding.risk
+        #         print("---- Risk Assessment ----")
+        #         print(f"Name: {risk.name}")
+        #         print(f"Threat Types: {risk.threat_types}")
+        #         print(f"Mitigation Type: {risk.mitigation_types}")
+        #         print(f"Vector String: {risk.vector_string}")
+        #         print(f"Vulnerability Cause: {risk.vulnerability_cause}")
+        #         print(f"Threat Description: {risk.threat_description}")
+        #         print(f"Risk Statement: {risk.risk_statement}")
+        #         print(f"Related Hazard Item: {risk.related_hazard_item}")
+        #         print(f"Rationale and Actions: {risk.rational_and_actions}")
+        #         print(f"Mitigation Reference: {risk.mitigation_reference}")
+        #         print(f"Finding Mitigation: {risk.finding_mitigation}")
+        #         print(f"Accept Risk: {risk.accept_risk}")
+        #         print("------------------------")
+        #     else:
+        #         print("No risk assessment information available.")
+
+        # for finding in findings.qs:
+        #     if finding.risk:
+        #         risk = finding.risk
+        #         risk.vector_string
+        #         finding.vector_string = finding.risk.vector_string
+        #     else:
+        #         finding.vector_string = ''  
+
         return {
             "findings": paged_findings,
             "filtered": findings,
         }
+
 
     def get_note_form(self, request: HttpRequest):
         # Set up the args for the form
@@ -173,7 +208,7 @@ class ViewTest(View):
     def get_form(self, request: HttpRequest, context: dict):
         return (
             self.get_typed_note_form(request, context)
-            if context.get("note_type_activation", 0)
+            if context.get("note_type_activation")
             else self.get_note_form(request)
         )
 
@@ -538,6 +573,7 @@ class AddFindingView(View):
             finding.reporter = request.user
             finding.numerical_severity = Finding.get_numerical_severity(finding.severity)
             finding.tags = context["form"].cleaned_data["tags"]
+            finding.unsaved_vulnerability_ids = context["form"].cleaned_data["vulnerability_ids"].split()
             finding.save()
             # Save and add new endpoints
             finding_helper.add_endpoints(finding, context["form"])
@@ -643,6 +679,7 @@ class AddFindingView(View):
         return finding, request, all_forms_valid
 
     def get_template(self):
+        # print("HERE AT TEMPLATE GET FUNCTION OF ADD FINDINGS")
         return "dojo/add_findings.html"
 
     def get(self, request: HttpRequest, test_id: int):
@@ -668,6 +705,7 @@ class AddFindingView(View):
         if success:
             if "_Finished" in request.POST:
                 return HttpResponseRedirect(reverse("view_test", args=(test.id,)))
+            # print("1111111111111111111111111111111")
             return HttpResponseRedirect(reverse("add_findings", args=(test.id,)))
         context["form_error"] = True
         # Render the form
@@ -683,6 +721,7 @@ def add_temp_finding(request, tid, fid):
     push_all_jira_issues = jira_helper.is_push_all_issues(finding)
 
     if request.method == "POST":
+        # print("HERE AT ADD FINDINGS")
 
         form = AddFindingForm(request.POST, req_resp=None, product=test.engagement.product)
         if jira_helper.get_jira_project(test):
@@ -772,6 +811,7 @@ def add_temp_finding(request, tid, fid):
         if jira_helper.get_jira_project(test):
             jform = JIRAFindingForm(push_all=jira_helper.is_push_all_issues(test), prefix="jiraform", jira_project=jira_helper.get_jira_project(test), finding_form=form)
 
+    
     product_tab = Product_Tab(test.engagement.product, title=_("Add Finding"), tab="engagements")
     product_tab.setEngagement(test.engagement)
     return render(request, "dojo/add_findings.html",
@@ -864,10 +904,7 @@ class ReImportScanResultsView(View):
         # by default we keep a trace of the scan_type used to create the test
         # if it's not here, we use the "name" of the test type
         # this feature exists to provide custom label for tests for some parsers
-        if test.scan_type:
-            scan_type = test.scan_type
-        else:
-            scan_type = test.test_type.name
+        scan_type = test.scan_type or test.test_type.name
         # Set the product tab
         product_tab = Product_Tab(test.engagement.product, title=_("Re-upload a %s") % scan_type, tab="engagements")
         product_tab.setEngagement(test.engagement)
@@ -920,6 +957,21 @@ class ReImportScanResultsView(View):
         context: dict,
     ) -> str | None:
         """Process the form and manipulate the input in any way that is appropriate"""
+        uploaded_file = request.FILES.get("file")
+        # print(uploaded_file)
+        
+        # Save the file if it exists
+        if uploaded_file:
+            try:
+                saved_file_path = self.save_uploaded_file(
+                    uploaded_file, 
+                    context=context
+                )
+                # Optionally add the saved file path to the context for now
+                context['saved_file_path'] = saved_file_path
+            except Exception as e:
+                return f"Error saving file: {str(e)}"
+            
         # Update the running context dict with cleaned form input
         context.update({
             "scan": request.FILES.get("file", None),
@@ -954,6 +1006,41 @@ class ReImportScanResultsView(View):
         context.get("test").tags = context.get("tags")
         context.get("test").version = context.get("version")
         return None
+    
+    def save_uploaded_file(
+        self,
+        uploaded_file,
+        context: dict,
+    ):
+        """
+        Save the uploaded file to uploads directory in the project
+        with a folder named after the product_ID
+        """
+        root_path = environ.Path(__file__) - 3  # Three folders back
+        
+        if context.get("test"):
+            product = context.get("test").engagement.product
+            product_id = product.id
+            product_folder = f"product_{product_id}"
+        else:
+            product = None
+            product_folder = "unknown_product"
+        
+        base_upload_dir = root_path('uploads', 'scan_reports', product_folder)
+        os.makedirs(base_upload_dir, exist_ok=True)
+                
+        filename = f"RiskAssessment_{product_id}.xlsx"
+        
+        file_path = os.path.join(base_upload_dir, filename)
+        
+        with open(file_path, 'wb+') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+        
+        if product:
+            Product_File_Path.objects.create(product=product, product_file_path=file_path)
+
+        return file_path
 
     def process_jira_form(
         self,
@@ -1005,7 +1092,7 @@ class ReImportScanResultsView(View):
                 untouched_finding_count=untouched_finding_count,
             ))
         except Exception as e:
-            logger.exception(e)
+            logger.exception("An exception error occurred during the report import")
             return f"An exception error occurred during the report import: {e}"
         return None
 

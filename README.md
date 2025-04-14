@@ -24,7 +24,7 @@
     </tr>
  </table>
 
-![Screenshot of DefectDojo](https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/static/images/screenshot1.png)
+![Screenshot of DefectDojo](https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/assets/images/screenshot1.png)
 
 [DefectDojo](https://www.defectdojo.com/) is a DevSecOps, ASPM (application security posture management), and
 vulnerability management tool.  DefectDojo orchestrates end-to-end security testing, vulnerability tracking,
@@ -50,12 +50,15 @@ docker-compose features and flags. You can run Compose V2 by replacing the hyphe
 git clone https://github.com/DefectDojo/django-DefectDojo
 cd django-DefectDojo
 
+# Check if your installed toolkit is compatible
+./docker/docker-compose-check.sh
+
 # Building Docker images
-./dc-build.sh
+docker compose build
 
 # Run the application (for other profiles besides postgres-redis see  
 # https://github.com/DefectDojo/django-DefectDojo/blob/dev/readme-docs/DOCKER.md)
-./dc-up-d.sh postgres-redis
+docker compose up -d
 
 # Obtain admin credentials. The initializer can take up to 3 minutes to run.
 # Use docker compose logs -f initializer to track its progress.
@@ -64,44 +67,38 @@ docker compose logs initializer | grep "Admin password:"
 
 ## For Docker Compose V1
 
-You can run Compose V1 by editing the files below to add the hyphen (-) between `docker compose`. 
+You can run Compose V1 by calling `docker-compose` (by adding the hyphen (-) between `docker compose`). 
+
+Following commands are using original version so you might need to adjust them:
 ```sh
-     dc-build.sh
-     dc-down.sh
-     dc-stop.sh
-     dc-unittest.sh
-     dc-up-d.sh
-     dc-up.sh
-     docker/docker-compose-check.sh
-     docker/entrypoint-initializer.sh
-     docker/setEnv.sh
+docker/docker-compose-check.sh
+docker/entrypoint-initializer.sh
+docker/setEnv.sh
 ```
 
 Navigate to `http://localhost:8080` to see your new instance!
 
 ## Documentation
 
-* [Official Docs](https://documentation.defectdojo.com/)
-    * [Docs for our `dev` branch](https://documentation.defectdojo.com/dev/)
-* [REST APIs](https://documentation.defectdojo.com/integrations/api-v2-docs/)
-* [Client APIs and Wrappers](https://documentation.defectdojo.com/integrations/api-v2-docs/#clients--api-wrappers)
+* [Official Docs](https://docs.defectdojo.com/)
+* [REST APIs](https://docs.defectdojo.com/en/open_source/api-v2-docs/)
+* [Client APIs and Wrappers](https://docs.defectdojo.com/en/open_source/api-v2-docs/#clients--api-wrappers)
 * Authentication options:
-    * [OAuth2/SAML2](https://documentation.defectdojo.com/integrations/social-authentication/)
-    * [LDAP](https://documentation.defectdojo.com/integrations/ldap-authentication/)
-* [Supported tools](https://documentation.defectdojo.com/integrations/parsers/)
+    * [OAuth2/SAML2](https://docs.defectdojo.com/en/open_source/archived_docs/integrations/social-authentication/)
+    * [LDAP](https://docs.defectdojo.com/en/open_source/ldap-authentication/)
+* [Supported tools](https://docs.defectdojo.com/en/connecting_your_tools/parsers/)
 
 ## Supported Installation Options
 
 * [Docker / Docker Compose](readme-docs/DOCKER.md)
-* [SaaS](https://www.defectdojo.com/pricing) - Includes Support & Supports the Project
-* [AWS AMI](https://aws.amazon.com/marketplace/pp/prodview-m2a25gr67xbzk) - Supports the Project
+* [SaaS](https://www.defectdojo.com/) - Includes Support & Supports the Project
 
 ## Community, Getting Involved, and Updates
 
-[<img src="https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/static/images/slack-logo-icon.png" alt="Slack" height="50"/>](https://owasp.org/slack/invite)
-[<img src="https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/static/images/Linkedin-logo-icon-png.png" alt="LinkedIn" height="50"/>](https://www.linkedin.com/company/defectdojo)
-[<img src="https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/static/images/Twitter_Logo.png" alt="Twitter" height="50"/>](https://twitter.com/defectdojo)
-[<img src="https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/static/images/YouTube-Emblem.png" alt="Youtube" height="50"/>](https://www.youtube.com/channel/UCWw9qzqptiIvTqSqhOFuCuQ)
+[<img src="https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/assets/images/slack-logo-icon.png" alt="Slack" height="50"/>](https://owasp.org/slack/invite)
+[<img src="https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/assets/images/Linkedin-logo-icon-png.png" alt="LinkedIn" height="50"/>](https://www.linkedin.com/company/defectdojo)
+[<img src="https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/assets/images/Twitter_Logo.png" alt="Twitter" height="50"/>](https://twitter.com/defectdojo)
+[<img src="https://raw.githubusercontent.com/DefectDojo/django-DefectDojo/dev/docs/assets/images/YouTube-Emblem.png" alt="Youtube" height="50"/>](https://www.youtube.com/channel/UCWw9qzqptiIvTqSqhOFuCuQ)
 
 [Join the OWASP Slack community](https://owasp.org/slack/invite) and participate in the discussion! You can find us in
 our channel there, [#defectdojo](https://owasp.slack.com/channels/defectdojo). Follow DefectDojo on
@@ -110,12 +107,11 @@ our channel there, [#defectdojo](https://owasp.slack.com/channels/defectdojo). F
 
 ## Contributing
 
-:warning: We have instituted a [feature freeze](https://github.com/DefectDojo/django-DefectDojo/discussions/8002) on v2
-of DefectDojo as we begin work on v3. Please see our [contributing guidelines](readme-docs/CONTRIBUTING.md) for more
-information. Check out our latest update on v3 [here](https://github.com/DefectDojo/django-DefectDojo/discussions/8974).
+Please see our [contributing guidelines](readme-docs/CONTRIBUTING.md) for more
+information.
 
 ## Pro Edition
-[Upgrade to DefectDojo Pro](https://www.defectdojo.com/pricing) today to take your DevSecOps to 11. DefectDojo Pro is
+[Upgrade to DefectDojo Pro](https://www.defectdojo.com/) today to take your DevSecOps to 11. DefectDojo Pro is
 designed to meet you wherever you are on your security journey and help you scale, with enhanced dashboards, additional
 smart features, tunable deduplication, and support from DevSecOps experts.
 

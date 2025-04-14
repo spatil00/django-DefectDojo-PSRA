@@ -85,13 +85,12 @@ class VeracodeJSONParser:
             if not finding:
                 continue
             # Set the date of the finding from the report if it is present
-            try:
+            if finding_status := vuln.get("finding_status"):
                 if settings.USE_FIRST_SEEN:
-                    finding.date = parser.parse(vuln.get("finding_status", {}).get("first_found_date", ""))
-                else:
-                    finding.date = parser.parse(vuln.get("finding_status", {}).get("last_found_date", ""))
-            except Exception:
-                pass
+                    if first_found_date := finding_status.get("first_found_date"):
+                        finding.date = parser.parse(first_found_date)
+                elif last_found_date := finding_status.get("last_found_date"):
+                    finding.date = parser.parse(last_found_date)
             # Generate the description
             finding = self.parse_description(finding, vuln.get("description"), scan_type)
             finding.nb_occurences = vuln.get("count", 1)
@@ -129,7 +128,7 @@ class VeracodeJSONParser:
                 if uncleaned_cvss.startswith(("CVSS:3.1/", "CVSS:3.0/")):
                     finding.cvssv3 = CVSS3(str(uncleaned_cvss)).clean_vector(output_prefix=True)
                 elif not uncleaned_cvss.startswith("CVSS"):
-                    finding.cvssv3 = CVSS3(f"CVSS:3.1/{str(uncleaned_cvss)}").clean_vector(output_prefix=True)
+                    finding.cvssv3 = CVSS3(f"CVSS:3.1/{uncleaned_cvss}").clean_vector(output_prefix=True)
             elif isinstance(uncleaned_cvss, float | int):
                 finding.cvssv3_score = float(uncleaned_cvss)
         # Fill in extra info based on the scan type
@@ -146,10 +145,7 @@ class VeracodeJSONParser:
         finding.dynamic_finding = False
         finding.static_finding = True
         # Get the finding category to get the high level info about the vuln
-        if category := finding_details.get("finding_category"):
-            category_title = category.get("name")
-        else:
-            category_title = None
+        category_title = category.get("name") if (category := finding_details.get("finding_category")) else None
         # Set the title of the finding to the name of the finding category.
         # If not present, fall back on CWE title. If that is not present, do nothing
         if category_title:
@@ -185,10 +181,7 @@ class VeracodeJSONParser:
         finding.dynamic_finding = True
         finding.static_finding = False
         # Get the finding category to get the high level info about the vuln
-        if category := finding_details.get("finding_category"):
-            category_title = category.get("name")
-        else:
-            category_title = None
+        category_title = category.get("name") if (category := finding_details.get("finding_category")) else None
         # Set the title of the finding to the name of the finding category.
         # If not present, fall back on CWE title. If that is not present, do nothing
         if category_title:
@@ -244,7 +237,7 @@ class VeracodeJSONParser:
             # See if the CVSS has already been set. If not, use the one here
             if not finding.cvssv3:
                 if cvss_vector := cve_dict.get("cvss3", {}).get("vector"):
-                    finding.cvssv3 = CVSS3(f"CVSS:3.1/{str(cvss_vector)}").clean_vector(output_prefix=True)
+                    finding.cvssv3 = CVSS3(f"CVSS:3.1/{cvss_vector}").clean_vector(output_prefix=True)
         # Put the product ID in the metadata
         if product_id := finding_details.get("product_id"):
             finding.description += f"**Product ID**: {product_id}\n"
@@ -267,9 +260,9 @@ class VeracodeJSONParser:
         if licenses := finding_details.get("licenses", []):
             # Build the license string
             license_markdown = "#### Licenses\n"
-            for license in licenses:
-                license_name = license.get("license_id")
-                license_details = self.license_mapping.get(int(license.get("risk_rating", 5)))
+            for lic in licenses:
+                license_name = lic.get("license_id")
+                license_details = self.license_mapping.get(int(lic.get("risk_rating", 5)))
                 license_markdown += f"- {license_name}: {license_details[0]}\n    - {license_details[1]}\n"
             # Do not add any extra text if the there are no licenses here
             if license_markdown != "#### Licenses\n":

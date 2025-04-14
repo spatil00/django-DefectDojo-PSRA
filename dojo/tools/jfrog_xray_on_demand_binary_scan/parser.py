@@ -48,10 +48,7 @@ def get_component_name_version(name):
 
 def get_severity(vulnerability):
     if "severity" in vulnerability:
-        if vulnerability["severity"] == "Unknown":
-            severity = "Info"
-        else:
-            severity = vulnerability["severity"].title()
+        severity = "Info" if vulnerability["severity"] == "Unknown" else vulnerability["severity"].title()
     else:
         severity = "Info"
     return severity
@@ -108,7 +105,7 @@ def process_component(component):
     fixed_versions = component.get("fixed_versions")
     if fixed_versions:
         mitigation = "**Versions containing a fix:**\n\n- "
-        mitigation = mitigation + "\n- ".join(fixed_versions)
+        mitigation += "\n- ".join(fixed_versions)
     if "impact_paths" in component:
         refs = []
         impact_paths_l1 = component["impact_paths"]

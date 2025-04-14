@@ -148,8 +148,6 @@ class MobSFParser:
                             "file_path": None,
                         }
                         mobsf_findings.append(mobsf_item)
-                    else:
-                        pass
 
         # Manifest Analysis
         if "manifest_analysis" in data:
@@ -207,7 +205,7 @@ class MobSFParser:
             if isinstance(data["binary_analysis"], list):
                 for details in data["binary_analysis"]:
                     for binary_analysis_type in details:
-                        if "name" != binary_analysis_type:
+                        if binary_analysis_type != "name":
                             mobsf_item = {
                                 "category": "Binary Analysis",
                                 "title": details[binary_analysis_type]["description"].split(".")[0],
@@ -305,7 +303,7 @@ class MobSFParser:
                 file_path = None
 
                 if "path" in finding:
-                    description = description + "\n\n**Files:**\n"
+                    description += "\n\n**Files:**\n"
                     for path in finding["path"]:
                         if file_path is None:
                             file_path = path
@@ -337,7 +335,7 @@ class MobSFParser:
             file_path = None
             if mobsf_finding["category"]:
                 description += "**Category:** " + mobsf_finding["category"] + "\n\n"
-            description = description + html2text(mobsf_finding["description"])
+            description += html2text(mobsf_finding["description"])
             finding = Finding(
                 title=title,
                 cwe=919,  # Weaknesses in Mobile Applications
@@ -377,7 +375,7 @@ class MobSFParser:
         signature         => Info (it's positive so... Info)
         signatureOrSystem => Info (it's positive so... Info)
         """
-        if "dangerous" == status:
+        if status == "dangerous":
             return "High"
         return "Info"
 

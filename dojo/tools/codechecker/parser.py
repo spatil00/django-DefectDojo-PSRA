@@ -56,13 +56,13 @@ def get_item(vuln):
         description += "{}\n".format(vuln["message"])
 
     location = vuln["file"]
-    file_path = location["path"] if "path" in location else None
+    file_path = location.get("path", None)
 
     if file_path:
         description += f"File path: {file_path}\n"
 
-    line = vuln["line"] if "line" in vuln else None
-    column = vuln["column"] if "column" in vuln else None
+    line = vuln.get("line", None)
+    column = vuln.get("column", None)
 
     if line is not None and column is not None:
         description += f"Location in file: line {line}, column {column}\n"
@@ -76,21 +76,19 @@ def get_item(vuln):
     risk_accepted = (
         review_status == "intentional"
     )  # not confirmed, not a bug, there are some reasons to make this code in this manner
-    false_positive = review_status in [
+    false_positive = review_status in {
         "false_positive",
         "suppressed",
-    ]  # this finding is false positive
+    }  # this finding is false positive
     active = not false_positive and not risk_accepted
 
-    hash = hashlib.sha256()
     unique_id = (
         vuln["report_hash"]
         + "."
         + vuln["analyzer_result_file_path"]
         + description
     )
-    hash.update(unique_id.encode())
-    unique_id_from_tool = hash.hexdigest()
+    unique_id_from_tool = hashlib.sha256(unique_id.encode()).hexdigest()
 
     title = ""
     if "checker_name" in vuln:

@@ -33,18 +33,15 @@ def parse_csv(csv_file) -> [Finding]:
 def get_report_findings(csv_reader) -> [dict]:
     """
     Filters out the unneeded information at the beginning of the Qualys CSV report.
+
     Args:
         csv_reader:
-
-    Returns:
 
     """
     report_findings = []
 
     for row in csv_reader:
-        if row.get("Title") and row["Title"] != "Title":
-            report_findings.append(row)
-        elif row.get("VULN TITLE"):
+        if (row.get("Title") and row["Title"] != "Title") or row.get("VULN TITLE"):
             report_findings.append(row)
     return report_findings
 
@@ -55,11 +52,13 @@ def _extract_cvss_vectors(cvss_base, cvss_temporal):
 
     This is done because the raw values come with additional characters that cannot be parsed with the cvss library.
         Example: 6.7 (AV:L/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H)
+
     Args:
         cvss_base:
         cvss_temporal:
     Returns:
         A CVSS3 Vector including both Base and Temporal if available
+
     """
     vector_pattern = r"^\d{1,2}.\d \((.*)\)"
     cvss_vector = "CVSS:3.0/"
@@ -166,67 +165,64 @@ def build_findings_from_dict(report_findings: [dict]) -> [Finding]:
             if settings.USE_FIRST_SEEN:
                 if date := report_finding.get("First Detected"):
                     date = datetime.strptime(date, "%m/%d/%Y %H:%M:%S").date()
-            else:
-                if date := report_finding.get("Last Detected"):
-                    date = datetime.strptime(date, "%m/%d/%Y %H:%M:%S").date()
+            elif date := report_finding.get("Last Detected"):
+                date = datetime.strptime(date, "%m/%d/%Y %H:%M:%S").date()
         except Exception:
             date = None
 
         finding_with_id = next((obj for obj in dojo_findings if obj.vuln_id_from_tool == report_finding["QID"]), None)
         if finding_with_id:
             finding = finding_with_id
-        else:
-            if report_finding.get("Title"):
-                finding = Finding(
-                    title=f"QID-{report_finding['QID']} | {report_finding['Title']}",
-                    mitigation=report_finding["Solution"],
-                    description=f"{report_finding['Threat']}\nResult Evidence: \n{report_finding.get('Threat', 'Not available')}",
-                    severity=get_severity(report_finding["Severity"]),
-                    impact=report_finding["Impact"],
-                    date=date,
-                    vuln_id_from_tool=report_finding["QID"],
-                    cvssv3=cvssv3,
+        elif report_finding.get("Title"):
+            finding = Finding(
+                title=f"QID-{report_finding['QID']} | {report_finding['Title']}",
+                mitigation=report_finding["Solution"],
+                description=f"{report_finding['Threat']}\nResult Evidence: \n{report_finding.get('Threat', 'Not available')}",
+                severity=get_severity(report_finding["Severity"]),
+                impact=report_finding["Impact"],
+                date=date,
+                vuln_id_from_tool=report_finding["QID"],
+                cvssv3=cvssv3,
+            )
+            # Qualys reports regression findings as active, but with a Date Last
+            # Fixed.
+            if report_finding["Date Last Fixed"]:
+                finding.mitigated = datetime.strptime(
+                    report_finding["Date Last Fixed"], "%m/%d/%Y %H:%M:%S",
                 )
-                # Qualys reports regression findings as active, but with a Date Last
-                # Fixed.
-                if report_finding["Date Last Fixed"]:
-                    finding.mitigated = datetime.strptime(
-                        report_finding["Date Last Fixed"], "%m/%d/%Y %H:%M:%S",
-                    )
-                    finding.is_mitigated = True
-                else:
-                    finding.is_mitigated = False
+                finding.is_mitigated = True
+            else:
+                finding.is_mitigated = False
 
-                finding.active = report_finding["Vuln Status"] in (
-                    "Active",
-                    "Re-Opened",
-                    "New",
-                )
+            finding.active = report_finding["Vuln Status"] in {
+                "Active",
+                "Re-Opened",
+                "New",
+            }
 
-                if finding.active:
-                    finding.mitigated = None
-                    finding.is_mitigated = False
-            elif report_finding.get("VULN TITLE"):
-                # Get the date based on the first_seen setting
-                try:
-                    if settings.USE_FIRST_SEEN:
-                        if date := report_finding.get("LAST SCAN"):
-                            date = parser.parse(date.replace("Z", ""))
-                    else:
-                        if date := report_finding.get("LAST SCAN"):
-                            date = parser.parse(date.replace("Z", ""))
-                except Exception:
-                    date = None
+            if finding.active:
+                finding.mitigated = None
+                finding.is_mitigated = False
+        elif report_finding.get("VULN TITLE"):
+            # Get the date based on the first_seen setting
+            try:
+                if settings.USE_FIRST_SEEN:
+                    if date := report_finding.get("LAST SCAN"):
+                        date = parser.parse(date.replace("Z", ""))
+                elif date := report_finding.get("LAST SCAN"):
+                    date = parser.parse(date.replace("Z", ""))
+            except Exception:
+                date = None
 
-                finding = Finding(
-                    title=f"QID-{report_finding['QID']} | {report_finding['VULN TITLE']}",
-                    mitigation=report_finding["SOLUTION"],
-                    description=f"{report_finding['THREAT']}\nResult Evidence: \n{report_finding.get('THREAT', 'Not available')}",
-                    severity=report_finding["SEVERITY"],
-                    impact=report_finding["IMPACT"],
-                    date=date,
-                    vuln_id_from_tool=report_finding["QID"],
-                )
+            finding = Finding(
+                title=f"QID-{report_finding['QID']} | {report_finding['VULN TITLE']}",
+                mitigation=report_finding["SOLUTION"],
+                description=f"{report_finding['THREAT']}\nResult Evidence: \n{report_finding.get('THREAT', 'Not available')}",
+                severity=report_finding["SEVERITY"],
+                impact=report_finding["IMPACT"],
+                date=date,
+                vuln_id_from_tool=report_finding["QID"],
+            )
         # Make sure we have something to append to
         if isinstance(finding.unsaved_vulnerability_ids, list):
             # Append CVEs if there is a chance for duplicates

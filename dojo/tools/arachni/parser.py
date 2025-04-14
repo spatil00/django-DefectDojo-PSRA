@@ -40,12 +40,8 @@ class ArachniParser:
             item = self.get_item(node, report_date)
             dupe_key = item.severity + item.title
             if dupe_key in items:
-                items[dupe_key].unsaved_endpoints = (
-                    items[dupe_key].unsaved_endpoints + item.unsaved_endpoints
-                )
-                items[dupe_key].unsaved_req_resp = (
-                    items[dupe_key].unsaved_req_resp + item.unsaved_req_resp
-                )
+                items[dupe_key].unsaved_endpoints += item.unsaved_endpoints
+                items[dupe_key].unsaved_req_resp += item.unsaved_req_resp
                 items[dupe_key].nb_occurences += 1
             else:
                 items[dupe_key] = item
@@ -87,9 +83,7 @@ class ArachniParser:
         description = html2text.html2text(description)
 
         remediation = (
-            item_node["remedy_guidance"]
-            if "remedy_guidance" in item_node
-            else "n/a"
+            item_node.get("remedy_guidance", "n/a")
         )
         if remediation:
             remediation = html2text.html2text(remediation)
@@ -105,7 +99,7 @@ class ArachniParser:
             references = html2text.html2text(references)
 
         severity = item_node.get("severity", "Info").capitalize()
-        if "Informational" == severity:
+        if severity == "Informational":
             severity = "Info"
 
         # Finding and Endpoint objects returned have not been saved to the

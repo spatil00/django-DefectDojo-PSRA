@@ -54,17 +54,16 @@ def cvss_score_to_severity(score: float, version: int) -> str:
             severity = "Medium"
         else:
             severity = "Low"
+    elif cvss_score >= 9.0:
+        severity = "Critical"
+    elif cvss_score >= 7.0:
+        severity = "High"
+    elif cvss_score >= 4.0:
+        severity = "Medium"
+    elif cvss_score >= 0.1:
+        severity = "Low"
     else:
-        if cvss_score >= 9.0:
-            severity = "Critical"
-        elif cvss_score >= 7.0:
-            severity = "High"
-        elif cvss_score >= 4.0:
-            severity = "Medium"
-        elif cvss_score >= 0.1:
-            severity = "Low"
-        else:
-            severity = "Info"
+        severity = "Info"
 
     return severity
 
@@ -205,7 +204,7 @@ class BaseEngineParser:
     #####
     # For parsing CVEs
     #####
-    CVE_PATTERN = re.compile("CVE-[0-9]+-[0-9]+", re.IGNORECASE)
+    CVE_PATTERN = re.compile(r"CVE-[0-9]+-[0-9]+", re.IGNORECASE)
 
     def is_cve(self, c: str) -> bool:
         return bool(c and isinstance(c, str) and self.CVE_PATTERN.fullmatch(c))

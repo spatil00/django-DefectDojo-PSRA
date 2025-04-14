@@ -64,15 +64,12 @@ class SonarQubeApiUpdaterFromSource:
         elif finding.risk_accepted:
             target_status = "WONTFIX"
         elif finding.active:
-            if finding.verified:
-                target_status = "CONFIRMED"
-            else:
-                target_status = "REOPENED"
+            target_status = "CONFIRMED" if finding.verified else "REOPENED"
         return target_status
 
     @staticmethod
     def update_finding_status(finding, sonarqube_status):
-        if sonarqube_status in ["OPEN", "REOPENED"]:
+        if sonarqube_status in {"OPEN", "REOPENED"}:
             finding.active = True
             finding.verified = False
             finding.false_p = False

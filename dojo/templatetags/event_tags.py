@@ -14,10 +14,10 @@ def _process_field_attributes(field, attr, process):
     # decorate field.as_widget method with updated attributes
     old_as_widget = field.as_widget
 
-    def as_widget(self, widget=None, attrs=None, only_initial=False):
+    def as_widget(self, widget=None, attrs=None, *, only_initial=False):
         attrs = attrs or {}
         process(widget or self.field.widget, attrs, attribute, value)
-        return old_as_widget(widget, attrs, only_initial)
+        return old_as_widget(widget, attrs, only_initial=only_initial)
 
     bound_method = type(old_as_widget)
     try:
@@ -63,8 +63,7 @@ def is_file(field):
 
 @register.filter
 def is_text(field):
-    return isinstance(field.field.widget, forms.TextInput) or \
-            isinstance(field.field.widget, forms.Textarea)
+    return isinstance(field.field.widget, forms.TextInput | forms.Textarea)
 
 
 @register.filter

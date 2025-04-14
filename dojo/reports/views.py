@@ -1,3 +1,6 @@
+import os
+import environ
+import shutil
 import csv
 import logging
 import re
@@ -16,7 +19,7 @@ from openpyxl import Workbook,load_workbook
 from openpyxl.styles import Font
 import warnings
 
-
+from urllib.parse import urlparse, parse_qs
 
 from dojo.authorization.authorization import user_has_permission_or_403
 from dojo.authorization.authorization_decorators import user_is_authorized
@@ -92,7 +95,7 @@ class ReportBuilder(View):
                                             finding__duplicate=False,
                                             finding__out_of_scope=False,
                                             )
-        if get_system_setting("enforce_verified_status", True):
+        if get_system_setting("enforce_verified_status", True) or get_system_setting("enforce_verified_status_metrics", True):
             endpoints = endpoints.filter(finding__active=True)
 
         endpoints = endpoints.distinct()
@@ -136,6 +139,10 @@ class CustomReport(View):
         self.host = report_url_resolver(request)
         self.selected_widgets = self.get_selected_widgets(request)
         self.widgets = list(self.selected_widgets.values())
+        self.include_disclaimer = get_system_setting("disclaimer_reports_forced", 0)
+        self.disclaimer = get_system_setting("disclaimer_reports")
+        if self.include_disclaimer and len(self.disclaimer) == 0:
+            self.disclaimer = "Please configure in System Settings."
 
     def get_selected_widgets(self, request):
         selected_widgets = report_widget_factory(json_data=request.POST["json"], request=request, host=self.host,
@@ -168,7 +175,10 @@ class CustomReport(View):
             "host": self.host,
             "finding_notes": self.finding_notes,
             "finding_images": self.finding_images,
-            "user_id": self.request.user.id}
+            "user_id": self.request.user.id,
+            "include_disclaimer": self.include_disclaimer,
+            "disclaimer": self.disclaimer,
+        }
 
 
 def report_findings(request):
@@ -198,7 +208,7 @@ def report_endpoints(request):
                                         finding__duplicate=False,
                                         finding__out_of_scope=False,
                                         )
-    if get_system_setting("enforce_verified_status", True):
+    if get_system_setting("enforce_verified_status", True) or get_system_setting("enforce_verified_status_metrics", True):
         endpoints = endpoints.filter(finding__active=True)
 
     endpoints = endpoints.distinct()
@@ -275,7 +285,7 @@ def product_endpoint_report(request, pid):
                                          finding__duplicate=False,
                                          finding__out_of_scope=False)
 
-    if get_system_setting("enforce_verified_status", True):
+    if get_system_setting("enforce_verified_status", True) or get_system_setting("enforce_verified_status_metrics", True):
         endpoint_ids = endpoints.filter(finding__active=True).values_list("id", flat=True)
 
     endpoint_ids = endpoints.values_list("id", flat=True)
@@ -289,8 +299,8 @@ def product_endpoint_report(request, pid):
     include_finding_images = int(request.GET.get("include_finding_images", 0))
     include_executive_summary = int(request.GET.get("include_executive_summary", 0))
     include_table_of_contents = int(request.GET.get("include_table_of_contents", 0))
-    include_disclaimer = int(request.GET.get("include_disclaimer", 0))
-    disclaimer = get_system_setting("disclaimer")
+    include_disclaimer = int(request.GET.get("include_disclaimer", 0)) or (get_system_setting("disclaimer_reports_forced", 0))
+    disclaimer = get_system_setting("disclaimer_reports")
     if include_disclaimer and len(disclaimer) == 0:
         disclaimer = "Please configure in System Settings."
     generate = "_generate" in request.GET
@@ -332,7 +342,7 @@ def product_endpoint_report(request, pid):
                    })
 
 
-def generate_report(request, obj, host_view=False):
+def generate_report(request, obj, *, host_view=False):
     user = Dojo_User.objects.get(id=request.user.id)
     product_type = None
     product = None
@@ -367,8 +377,8 @@ def generate_report(request, obj, host_view=False):
     include_finding_images = int(request.GET.get("include_finding_images", 0))
     include_executive_summary = int(request.GET.get("include_executive_summary", 0))
     include_table_of_contents = int(request.GET.get("include_table_of_contents", 0))
-    include_disclaimer = int(request.GET.get("include_disclaimer", 0))
-    disclaimer = get_system_setting("disclaimer")
+    include_disclaimer = int(request.GET.get("include_disclaimer", 0)) or (get_system_setting("disclaimer_reports_forced", 0))
+    disclaimer = get_system_setting("disclaimer_reports")
 
     if include_disclaimer and len(disclaimer) == 0:
         disclaimer = "Please configure in System Settings."
@@ -539,7 +549,7 @@ def generate_report(request, obj, host_view=False):
                    "title": report_title,
                    "host": report_url_resolver(request),
                    "user_id": request.user.id}
-    elif type(obj).__name__ in ["QuerySet", "CastTaggedQuerySet", "TagulousCastTaggedQuerySet"]:
+    elif type(obj).__name__ in {"QuerySet", "CastTaggedQuerySet", "TagulousCastTaggedQuerySet"}:
         findings = report_finding_filter_class(request.GET, queryset=prefetch_related_findings_for_report(obj).distinct())
         report_name = "Finding"
         template = "dojo/finding_pdf_report.html"
@@ -647,9 +657,9 @@ def prefetch_related_endpoints_for_report(endpoints):
                                      )
 
 
-def get_list_index(list, index):
+def get_list_index(full_list, index):
     try:
-        element = list[index]
+        element = full_list[index]
     except Exception:
         element = None
     return element
@@ -879,36 +889,30 @@ class CSVExportView(View):
                 fields.append(finding.test.engagement.product.name)
 
                 endpoint_value = ""
-                num_endpoints = 0
                 for endpoint in finding.endpoints.all():
-                    num_endpoints += 1
-                    endpoint_value += f"{str(endpoint)}; "
+                    endpoint_value += f"{endpoint}; "
                 endpoint_value = endpoint_value.removesuffix("; ")
                 if len(endpoint_value) > EXCEL_CHAR_LIMIT:
                     endpoint_value = endpoint_value[:EXCEL_CHAR_LIMIT - 3] + "..."
                 fields.append(endpoint_value)
 
                 vulnerability_ids_value = ""
-                num_vulnerability_ids = 0
-                for vulnerability_id in finding.vulnerability_ids:
-                    num_vulnerability_ids += 1
+                for num_vulnerability_ids, vulnerability_id in enumerate(finding.vulnerability_ids):
                     if num_vulnerability_ids > 5:
                         vulnerability_ids_value += "..."
                         break
-                    vulnerability_ids_value += f"{str(vulnerability_id)}; "
+                    vulnerability_ids_value += f"{vulnerability_id}; "
                 if finding.cve and vulnerability_ids_value.find(finding.cve) < 0:
                     vulnerability_ids_value += finding.cve
                 vulnerability_ids_value = vulnerability_ids_value.removesuffix("; ")
                 fields.append(vulnerability_ids_value)
                 # Tags
                 tags_value = ""
-                num_tags = 0
-                for tag in finding.tags.all():
-                    num_tags += 1
+                for num_tags, tag in enumerate(finding.tags.all()):
                     if num_tags > 5:
                         tags_value += "..."
                         break
-                    tags_value += f"{str(tag)}; "
+                    tags_value += f"{tag}; "
                 tags_value = tags_value.removesuffix("; ")
                 fields.append(tags_value)
 
@@ -1028,10 +1032,8 @@ class ExcelExportView(View):
                 col_num += 1
 
                 endpoint_value = ""
-                num_endpoints = 0
                 for endpoint in finding.endpoints.all():
-                    num_endpoints += 1
-                    endpoint_value += f"{str(endpoint)}; \n"
+                    endpoint_value += f"{endpoint}; \n"
                 endpoint_value = endpoint_value.removesuffix("; \n")
                 if len(endpoint_value) > EXCEL_CHAR_LIMIT:
                     endpoint_value = endpoint_value[:EXCEL_CHAR_LIMIT - 3] + "..."
@@ -1039,13 +1041,11 @@ class ExcelExportView(View):
                 col_num += 1
 
                 vulnerability_ids_value = ""
-                num_vulnerability_ids = 0
-                for vulnerability_id in finding.vulnerability_ids:
-                    num_vulnerability_ids += 1
+                for num_vulnerability_ids, vulnerability_id in enumerate(finding.vulnerability_ids):
                     if num_vulnerability_ids > 5:
                         vulnerability_ids_value += "..."
                         break
-                    vulnerability_ids_value += f"{str(vulnerability_id)}; \n"
+                    vulnerability_ids_value += f"{vulnerability_id}; \n"
                 if finding.cve and vulnerability_ids_value.find(finding.cve) < 0:
                     vulnerability_ids_value += finding.cve
                 vulnerability_ids_value = vulnerability_ids_value.removesuffix("; \n")
@@ -1054,7 +1054,7 @@ class ExcelExportView(View):
                 # tags
                 tags_value = ""
                 for tag in finding.tags.all():
-                    tags_value += f"{str(tag)}; \n"
+                    tags_value += f"{tag}; \n"
                 tags_value = tags_value.removesuffix("; \n")
                 worksheet.cell(row=row_num, column=col_num, value=tags_value)
                 col_num += 1
@@ -1129,6 +1129,13 @@ class PSRAExcelExportView(View):
         "PV": "BY",  # Privacy Violation
     }
 
+    def get_product(self, product_id: int):
+        return get_object_or_404(Product, id=product_id)
+
+    def get_test(self, test_id: int):
+        return get_object_or_404(Test, id=test_id)
+    
+
     def initialize_factors_with_dash(self, worksheet, row):
         """Initialize cells corresponding to factors in factors_to_mark_with_x with '-'."""
         for factor in self.factors_to_mark_with_x:
@@ -1201,13 +1208,61 @@ class PSRAExcelExportView(View):
                 rmm_worksheet[f"{threat_mapping[threat]}{idx}"] = 'X'
 
 
-    def get(self, request):
+    def get(self, request, test_id=None):
         warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.worksheet._reader")
         warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.reader.workbook")
-        
-        template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
-        workbook = load_workbook(template_path,data_only=False)
-        
+
+        if test_id:
+            test = self.get_test(test_id)
+            product = test.engagement.product
+
+        else:
+            raw_url = request.GET.get("url", "")
+            product_id = request.GET.get("product_id")
+
+            try:
+                url_parts = raw_url.split('?')
+                base_path = url_parts[0]
+
+                if not product_id:
+                    match = re.search(r'/product/(\d+)/', base_path)
+                    if match:
+                        product_id = match.group(1)
+
+                if product_id:
+                    product_id = int(product_id)
+                else:
+                    return HttpResponse("Error: Cannot determine product ID", status=400)
+
+                product = self.get_product(product_id)
+
+                if len(url_parts) > 1:
+                    additional_params = parse_qs(url_parts[1])
+
+                    get_copy = request.GET.copy()
+                    for key, value in additional_params.items():
+                        get_copy[key] = value[0] if len(value) == 1 else value
+
+                    request.GET = get_copy
+
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error parsing URL: {raw_url}. Error: {str(e)}")
+                return HttpResponse(f"Invalid URL: {raw_url}", status=400)
+
+        pid = product.id
+        root_path = environ.Path(__file__) - 3  # Three folders back 
+        product_folder = f"product_{pid}"
+        base_upload_dir = root_path('uploads', 'scan_reports', product_folder)
+
+        os.makedirs(base_upload_dir, exist_ok=True)
+        existing_file_path = os.path.join(base_upload_dir, f"RiskAssessment_{pid}.xlsx")
+
+        if not os.path.exists(existing_file_path):
+            template_path = root_path('uploads', 'PSRA/PSRA template.xlsx')
+            # template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
+            shutil.copy(template_path, existing_file_path)
+
+        workbook = load_workbook(existing_file_path, data_only=False)
         rmm_worksheet = workbook["RMM"]
         mitigation_worksheet = workbook["Mitigations"]
 
@@ -1215,10 +1270,9 @@ class PSRAExcelExportView(View):
         self.findings = findings
         findings = self.add_findings_data()
 
-        start_row = 4  # Starting row for data in Excel
+        start_row = 4
         for idx, finding in enumerate(findings, start=start_row):
             risk_assessment = Risk_Assessment.objects.filter(assessed_findings=finding).first()
-            
             if risk_assessment is None: 
                 continue
             
@@ -1226,49 +1280,46 @@ class PSRAExcelExportView(View):
             if not vector_string:
                 continue
             
-            vulnerability_description = finding.title
+            vulnerability_description = finding.description
             threat_description = risk_assessment.threat_description
             risk_statement = risk_assessment.risk_statement
             hazard_statement = risk_assessment.related_hazard_item
             vulnerability_cause = risk_assessment.vulnerability_cause
             threat_types = risk_assessment.threat_types
-            rationale_and_actions= risk_assessment.rational_and_actions
+            rationale_and_actions = risk_assessment.rational_and_actions
             accepted_risk = finding.risk_accepted
-            mitigation_type  = risk_assessment.mitigation_types
+            mitigation_type = risk_assessment.mitigation_types
             mitigation_reference = risk_assessment.mitigation_reference
             
             self.set_threat_type(rmm_worksheet, idx, threat_types)
-
-            # Initialize cells with '-' for factors in factors_to_mark_with_x
             self.initialize_factors_with_dash(rmm_worksheet, idx)
-
             factor_values = self.parse_vector_string(vector_string)
             self.fill_finding_row(rmm_worksheet, factor_values, idx)
 
-            # Set the additional values in specified columns
             rmm_worksheet[f"B{idx}"] = "V"+str(finding.id)
-            rmm_worksheet[f"C{idx}"] = vulnerability_description  # Vulnerability Description in column "C"
-            rmm_worksheet[f"K{idx}"] = threat_description         # Threat Description in column "K"
-            rmm_worksheet[f"L{idx}"] = risk_statement             # Risk Statement in column "L"
+            rmm_worksheet[f"C{idx}"] = vulnerability_description
+            rmm_worksheet[f"K{idx}"] = threat_description
+            rmm_worksheet[f"L{idx}"] = risk_statement
             rmm_worksheet[f"CF{idx}"] = hazard_statement
             rmm_worksheet[f"D{idx}"] = vulnerability_cause
             rmm_worksheet[f"CE{idx}"] = rationale_and_actions
+            rmm_worksheet[f"CD{idx}"] = "Yes" if accepted_risk else "No"
 
-            if accepted_risk:
-                rmm_worksheet[f"CD{idx}"] = "Yes"
-            else:
-                rmm_worksheet[f"CD{idx}"] = "No"
+            mitigation_worksheet[f"A{idx-2}"] = "M"+str(finding.id)
+            mitigation_worksheet[f"B{idx-2}"] = finding.mitigation
+            mitigation_worksheet[f"C{idx-2}"] = mitigation_type
+            mitigation_worksheet[f"D{idx-2}"] = mitigation_reference
+            rmm_worksheet[f"BI{idx}"] = "M"+str(finding.id)
 
-            mitigation_worksheet[f"A{idx-2}"] = "M"+str(finding.id)  # Mitigations start from row 2
-            mitigation_worksheet[f"B{idx-2}"] = finding.mitigation  # Mitigation in column "B"
-            mitigation_worksheet[f"C{idx-2}"] = mitigation_type  # Mitigation Type in column "C"
-            mitigation_worksheet[f"D{idx-2}"] = mitigation_reference  # Mitigation Reference in column "D"
+        workbook.save(existing_file_path)
 
-            rmm_worksheet[f"BI{idx}"] = "M"+str(finding.id) # set Mitigation ID in column "BI"
-
-        
-        response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        response["Content-Disposition"] = 'attachment; filename="RiskAssessment.xlsx"'
-        workbook.save(response)
+        with open(existing_file_path, 'rb') as file:
+            response = HttpResponse(
+                file.read(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            response['Content-Disposition'] = f'attachment; filename="RiskAssessment_{pid}.xlsx"'
         
         return response
+
+

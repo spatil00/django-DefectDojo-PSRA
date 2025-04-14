@@ -6,10 +6,9 @@ from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.translation import gettext as _
 
-from dojo.models import Engagement
+from dojo.models import Engagement, Finding, Risk_Assessment
 from dojo.notes.helper import delete_related_notes
 from dojo.notifications.helper import create_notification
-
 
 @receiver(post_save, sender=Engagement)
 def engagement_post_save(sender, instance, created, **kwargs):
@@ -23,7 +22,7 @@ def engagement_post_save(sender, instance, created, **kwargs):
 def engagement_pre_save(sender, instance, **kwargs):
     old = sender.objects.filter(pk=instance.pk).first()
     if old and instance.status != old.status:
-        if instance.status in ["Cancelled", "Completed"]:
+        if instance.status in {"Cancelled", "Completed"}:
             create_notification(event="engagement_closed",
                                 title=_("Closure of %s") % instance.name,
                                 description=_('The engagement "%s" was closed') % (instance.name),
@@ -58,6 +57,3 @@ def engagement_post_delete(sender, instance, using, origin, **kwargs):
                             icon="exclamation-triangle")
 
 
-@receiver(pre_delete, sender=Engagement)
-def engagement_pre_delete(sender, instance, **kwargs):
-    delete_related_notes(instance)

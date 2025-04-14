@@ -95,7 +95,6 @@ def get_item(item_node, tree, test):
     """Return the individual Findigns from items found in report."""
     references = []
     mitigation = ""
-    test = test
     static_finding = True
     title = ""
     unique_id_from_tool = ""
@@ -122,10 +121,7 @@ def get_item(item_node, tree, test):
     elif item_node["via"] and isinstance(item_node["via"][0], dict):
         title = item_node["via"][0]["title"]
         component_name = item_node["nodes"][0]
-        if len(item_node["via"][0]["cwe"]) > 0:
-            cwe = item_node["via"][0]["cwe"][0]
-        else:
-            cwe = None
+        cwe = item_node["via"][0]["cwe"][0] if len(item_node["via"][0]["cwe"]) > 0 else None
         references.append(item_node["via"][0]["url"])
         unique_id_from_tool = str(item_node["via"][0]["source"])
         cvssv3 = item_node["via"][0]["cvss"]["vectorString"]
@@ -214,10 +210,9 @@ def get_vuln_description(item_node, tree):
                 if tree[effect]["name"] != ev["name"]:
                     description += ("  Depends on vulnerable versions of "
                                     + ev["name"] + "\n")
-            else:
-                if tree[effect]["name"] != ev:
-                    description += ("  Depends on vulnerable versions of "
-                                    + ev + "\n")
+            elif tree[effect]["name"] != ev:
+                description += ("  Depends on vulnerable versions of "
+                                + ev + "\n")
         for en in tree[effect]["nodes"]:
             description += "  " + en + "\n"
 

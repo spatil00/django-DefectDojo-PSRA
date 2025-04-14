@@ -1,10 +1,11 @@
+import os
 import base64
 import copy
 import hashlib
 import logging
-import os
 import re
 import warnings
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -123,6 +124,14 @@ def _manage_inherited_tags(obj, incoming_inherited_tags, potentially_existing_ta
             obj.tags.set(cleaned_tag_list)
 
 
+def _copy_model_util(model_in_database, exclude_fields: list[str] = []):
+    new_model_instance = model_in_database.__class__()
+    for field in model_in_database._meta.fields:
+        if field.name not in {"id", *exclude_fields}:
+            setattr(new_model_instance, field.name, getattr(model_in_database, field.name))
+    return new_model_instance
+
+
 @deconstructible
 class UniqueUploadNameProvider:
 
@@ -135,19 +144,21 @@ class UniqueUploadNameProvider:
     the filename extension will be dropped.
     """
 
-    def __init__(self, directory=None, keep_basename=False, keep_ext=True):
+    def __init__(self, directory=None, *, keep_basename=False, keep_ext=True):
         self.directory = directory
         self.keep_basename = keep_basename
         self.keep_ext = keep_ext
 
     def __call__(self, model_instance, filename):
-        base, ext = os.path.splitext(filename)
+        path = Path(filename)
+        base = path.parent / path.stem
+        ext = path.suffix
         filename = f"{base}_{uuid4()}" if self.keep_basename else str(uuid4())
         if self.keep_ext:
             filename += ext
         if self.directory is None:
             return filename
-        return os.path.join(now().strftime(self.directory), filename)
+        return Path(now().strftime(self.directory)) / filename
 
 
 class Regulation(models.Model):
@@ -361,10 +372,32 @@ class System_Settings(models.Model):
 
     enforce_verified_status = models.BooleanField(
         default=True,
-        verbose_name=_("Enforce Verified Status"),
-        help_text=_("When enabled, features such as product grading, jira "
-                    "integration, metrics, and reports will only interact "
-                    "with verified findings.",
+        verbose_name=_("Enforce Verified Status - Globally"),
+        help_text=_(
+            "When enabled, features such as product grading, jira "
+            "integration, metrics, and reports will only interact "
+            "with verified findings. This setting will override "
+            "individually scoped verified toggles.",
+        ),
+    )
+    enforce_verified_status_jira = models.BooleanField(
+        default=True,
+        verbose_name=_("Enforce Verified Status - Jira"),
+        help_text=_("When enabled, findings must have a verified status to be pushed to jira."),
+    )
+    enforce_verified_status_product_grading = models.BooleanField(
+        default=True,
+        verbose_name=_("Enforce Verified Status - Product Grading"),
+        help_text=_(
+            "When enabled, findings must have a verified status to be considered as part of a product's grading.",
+        ),
+    )
+    enforce_verified_status_metrics = models.BooleanField(
+        default=True,
+        verbose_name=_("Enforce Verified Status - Metrics"),
+        help_text=_(
+            "When enabled, findings must have a verified status to be counted in metric calculations, "
+            "be included in reports, and filters.",
         ),
     )
 
@@ -488,9 +521,20 @@ class System_Settings(models.Model):
         help_text=_("Enable anyone with a link to the survey to answer a survey"),
     )
     credentials = models.TextField(max_length=3000, blank=True)
-    disclaimer = models.TextField(max_length=3000, default="", blank=True,
-                                  verbose_name=_("Custom Disclaimer"),
-                                  help_text=_("Include this custom disclaimer on all notifications and generated reports"))
+    disclaimer_notifications = models.TextField(max_length=3000, default="", blank=True,
+                                  verbose_name=_("Custom Disclaimer for Notifications"),
+                                  help_text=_("Include this custom disclaimer on all notifications"))
+    disclaimer_reports = models.TextField(max_length=5000, default="", blank=True,
+                                  verbose_name=_("Custom Disclaimer for Reports"),
+                                  help_text=_("Include this custom disclaimer on generated reports"))
+    disclaimer_reports_forced = models.BooleanField(
+        default=False,
+        blank=False,
+        verbose_name=_("Force to add disclaimer reports"),
+        help_text=_("Disclaimer will be added to all reports even if user didn't selected 'Include disclaimer'."))
+    disclaimer_notes = models.TextField(max_length=3000, default="", blank=True,
+                                  verbose_name=_("Custom Disclaimer for Notes"),
+                                  help_text=_("Include this custom disclaimer next to input form for notes"))
     risk_acceptance_form_default_days = models.IntegerField(null=True, blank=True, default=180, help_text=_("Default expiry period for risk acceptance form."))
     risk_acceptance_notify_before_expiration = models.IntegerField(null=True, blank=True, default=10,
                     verbose_name=_("Risk acceptance expiration heads up days"), help_text=_("Notify X days before risk acceptance expires. Leave empty to disable."))
@@ -668,9 +712,7 @@ class NoteHistory(models.Model):
     current_editor = models.ForeignKey(Dojo_User, editable=False, null=True, on_delete=models.CASCADE)
 
     def copy(self):
-        copy = self
-        copy.pk = None
-        copy.id = None
+        copy = _copy_model_util(self)
         copy.save()
         return copy
 
@@ -696,12 +738,9 @@ class Notes(models.Model):
         return self.entry
 
     def copy(self):
-        copy = self
+        copy = _copy_model_util(self)
         # Save the necessary ManyToMany relationships
         old_history = list(self.history.all())
-        # Wipe the IDs of the new object
-        copy.pk = None
-        copy.id = None
         # Save the object before setting any ManyToMany relationships
         copy.save()
         # Copy the history
@@ -716,10 +755,7 @@ class FileUpload(models.Model):
     file = models.FileField(upload_to=UniqueUploadNameProvider("uploaded_files"))
 
     def copy(self):
-        copy = self
-        # Wipe the IDs of the new object
-        copy.pk = None
-        copy.id = None
+        copy = _copy_model_util(self)
         # Add unique modifier to file name
         copy.title = f"{self.title} - clone-{str(uuid4())[:8]}"
         # Create new unique file name
@@ -749,10 +785,7 @@ class FileUpload(models.Model):
         valid_extensions = settings.FILE_UPLOAD_TYPES
 
         # why does this not work with self.file....
-        if self.file:
-            file_name = self.file.url
-        else:
-            file_name = self.title
+        file_name = self.file.url if self.file else self.title
         if Path(file_name).suffix.lower() not in valid_extensions:
             if accepted_extensions := f"{', '.join(valid_extensions)}":
                 msg = (
@@ -825,11 +858,11 @@ class Product_Type(models.Model):
         health = 100
         if c_findings.count() > 0:
             health = 40
-            health = health - ((c_findings.count() - 1) * 5)
+            health -= ((c_findings.count() - 1) * 5)
         if h_findings.count() > 0:
             if health == 100:
                 health = 60
-            health = health - ((h_findings.count() - 1) * 2)
+            health -= ((h_findings.count() - 1) * 2)
         if health < 5:
             return 5
         return health
@@ -909,8 +942,8 @@ class DojoMeta(models.Model):
                self.finding_id]
         ids_count = 0
 
-        for id in ids:
-            if id is not None:
+        for obj_id in ids:
+            if obj_id is not None:
                 ids_count += 1
 
         if ids_count == 0:
@@ -1001,7 +1034,7 @@ class SLA_Configuration(models.Model):
             if (initial_sla_config.low != self.low) or (initial_sla_config.enforce_low != self.enforce_low):
                 severities.append("Low")
             # if severities have changed, update finding sla expiration dates with those severities
-            if len(severities):
+            if severities:
                 # set the async updating flag to true for this sla config
                 self.async_updating = True
                 super().save(*args, **kwargs)
@@ -1238,7 +1271,7 @@ class Product(models.Model):
                                         date__range=[start_date,
                                                     end_date])
 
-        if get_system_setting("enforce_verified_status", True):
+        if get_system_setting("enforce_verified_status", True) or get_system_setting("enforce_verified_status_metrics", True):
             findings = findings.filter(verified=True)
 
         critical = findings.filter(severity="Critical").count()
@@ -1304,6 +1337,20 @@ class Product_Type_Group(models.Model):
     product_type = models.ForeignKey(Product_Type, on_delete=models.CASCADE)
     group = models.ForeignKey(Dojo_Group, on_delete=models.CASCADE)
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
+
+
+class Product_File_Path(models.Model):
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="file_paths"
+    )
+    product_file_path = models.CharField(max_length=1000)
+
+    def delete(self, *args, **kwargs):
+        if os.path.exists(self.product_file_path):
+            os.remove(self.product_file_path)
+        super().delete(*args, **kwargs)  
 
 
 class Tool_Type(models.Model):
@@ -1511,16 +1558,13 @@ class Engagement(models.Model):
         return reverse("view_engagement", args=[str(self.id)])
 
     def copy(self):
-        copy = self
+        copy = _copy_model_util(self)
         # Save the necessary ManyToMany relationships
         old_notes = list(self.notes.all())
         old_files = list(self.files.all())
         old_tags = list(self.tags.all())
         old_risk_acceptances = list(self.risk_acceptance.all())
         old_tests = list(Test.objects.filter(engagement=self))
-        # Wipe the IDs of the new object
-        copy.pk = None
-        copy.id = None
         # Save the object before setting any ManyToMany relationships
         copy.save()
         # Copy the notes
@@ -1541,17 +1585,11 @@ class Engagement(models.Model):
         return copy
 
     def is_overdue(self):
-        if self.engagement_type == "CI/CD":
-            overdue_grace_days = 10
-        else:
-            overdue_grace_days = 0
+        overdue_grace_days = 10 if self.engagement_type == "CI/CD" else 0
 
         max_end_date = timezone.now() - relativedelta(days=overdue_grace_days)
 
-        if self.target_end < max_end_date.date():
-            return True
-
-        return False
+        return self.target_end < max_end_date.date()
 
     def get_breadcrumbs(self):
         bc = self.product.get_breadcrumbs()
@@ -1565,7 +1603,7 @@ class Engagement(models.Model):
         from dojo.utils import get_system_setting
 
         findings = Finding.objects.filter(risk_accepted=False, active=True, duplicate=False, test__engagement=self)
-        if get_system_setting("enforce_verified_status", True):
+        if get_system_setting("enforce_verified_status", True) or get_system_setting("enforce_verified_status_metrics", True):
             findings = findings.filter(verified=True)
 
         return findings
@@ -1584,10 +1622,13 @@ class Engagement(models.Model):
 
     def delete(self, *args, **kwargs):
         logger.debug("%d engagement delete", self.id)
-        import dojo.finding.helper as helper
+        from dojo.finding import helper
         helper.prepare_duplicates_for_delete(engagement=self)
         super().delete(*args, **kwargs)
-        calculate_grade(self.product)
+        with suppress(Product.DoesNotExist):
+            # Suppressing a potential issue created from async delete removing
+            # related objects in a separate task
+            calculate_grade(self.product)
 
     def inherit_tags(self, potentially_existing_tags):
         # get a copy of the tags to be inherited
@@ -1631,13 +1672,11 @@ class Endpoint_Status(models.Model):
         ]
 
     def __str__(self):
-        return f"'{str(self.finding)}' on '{str(self.endpoint)}'"
+        return f"'{self.finding}' on '{self.endpoint}'"
 
     def copy(self, finding=None):
-        copy = self
+        copy = _copy_model_util(self)
         current_endpoint = self.endpoint
-        copy.pk = None
-        copy.id = None
         if finding:
             copy.finding = finding
         copy.endpoint = current_endpoint
@@ -1648,10 +1687,7 @@ class Endpoint_Status(models.Model):
     @property
     def age(self):
 
-        if self.mitigated:
-            diff = self.mitigated_time.date() - self.date
-        else:
-            diff = get_current_date() - self.date
+        diff = self.mitigated_time.date() - self.date if self.mitigated else get_current_date() - self.date
         days = diff.days
         return max(0, days)
 
@@ -1690,6 +1726,23 @@ class Endpoint(models.Model):
         indexes = [
             models.Index(fields=["product"]),
         ]
+
+    def __hash__(self):
+        return self.__str__().__hash__()
+
+    def __eq__(self, other):
+        if isinstance(other, Endpoint):
+            # Check if the contents of the endpoint match
+            contents_match = str(self) == str(other)
+            # Determine if products should be used in the equation
+            if self.product is not None and other.product is not None:
+                # Check if the products are the same
+                products_match = (self.product) == other.product
+                # Check if the contents match
+                return products_match and contents_match
+            return contents_match
+
+        return NotImplemented
 
     def __str__(self):
         try:
@@ -1789,7 +1842,7 @@ class Endpoint(models.Model):
                     action_string = "Postgres does not accept NULL character. Attempting to replace with %00..."
                     for remove_str in null_char_list:
                         self.path = self.path.replace(remove_str, "%00")
-                    logging.error(f'Path "{old_value}" has invalid format - It contains the NULL character. The following action was taken: {action_string}')
+                    logger.error(f'Path "{old_value}" has invalid format - It contains the NULL character. The following action was taken: {action_string}')
             if self.path == "":
                 self.path = None
 
@@ -1802,7 +1855,7 @@ class Endpoint(models.Model):
                     action_string = "Postgres does not accept NULL character. Attempting to replace with %00..."
                     for remove_str in null_char_list:
                         self.query = self.query.replace(remove_str, "%00")
-                    logging.error(f'Query "{old_value}" has invalid format - It contains the NULL character. The following action was taken: {action_string}')
+                    logger.error(f'Query "{old_value}" has invalid format - It contains the NULL character. The following action was taken: {action_string}')
             if self.query == "":
                 self.query = None
 
@@ -1815,29 +1868,12 @@ class Endpoint(models.Model):
                     action_string = "Postgres does not accept NULL character. Attempting to replace with %00..."
                     for remove_str in null_char_list:
                         self.fragment = self.fragment.replace(remove_str, "%00")
-                    logging.error(f'Fragment "{old_value}" has invalid format - It contains the NULL character. The following action was taken: {action_string}')
+                    logger.error(f'Fragment "{old_value}" has invalid format - It contains the NULL character. The following action was taken: {action_string}')
             if self.fragment == "":
                 self.fragment = None
 
         if errors:
             raise ValidationError(errors)
-
-    def __hash__(self):
-        return self.__str__().__hash__()
-
-    def __eq__(self, other):
-        if isinstance(other, Endpoint):
-            # Check if the contents of the endpoint match
-            contents_match = str(self) == str(other)
-            # Determine if products should be used in the equation
-            if self.product is not None and other.product is not None:
-                # Check if the products are the same
-                products_match = (self.product) == other.product
-                # Check if the contents match
-                return products_match and contents_match
-            return contents_match
-
-        return NotImplemented
 
     @property
     def is_broken(self):
@@ -1846,9 +1882,7 @@ class Endpoint(models.Model):
         except:
             return True
         else:
-            if self.product:
-                return False
-            return True
+            return not self.product
 
     @property
     def mitigated(self):
@@ -1995,10 +2029,10 @@ class Endpoint(models.Model):
         query_string = "&".join(query_parts)
 
         protocol = url.scheme if url.scheme != "" else None
-        userinfo = ":".join(url.userinfo) if url.userinfo not in [(), ("",)] else None
+        userinfo = ":".join(url.userinfo) if url.userinfo not in {(), ("",)} else None
         host = url.host if url.host != "" else None
         port = url.port
-        path = "/".join(url.path)[:500] if url.path not in [None, (), ("",)] else None
+        path = "/".join(url.path)[:500] if url.path not in {None, (), ("",)} else None
         query = query_string[:1000] if query_string is not None and query_string != "" else None
         fragment = url.fragment[:500] if url.fragment is not None and url.fragment != "" else None
 
@@ -2108,15 +2142,12 @@ class Test(models.Model):
         return bc
 
     def copy(self, engagement=None):
-        copy = self
+        copy = _copy_model_util(self)
         # Save the necessary ManyToMany relationships
         old_notes = list(self.notes.all())
         old_files = list(self.files.all())
         old_tags = list(self.tags.all())
         old_findings = list(Finding.objects.filter(test=self))
-        # Wipe the IDs of the new object
-        copy.pk = None
-        copy.id = None
         if engagement:
             copy.engagement = engagement
         # Save the object before setting any ManyToMany relationships
@@ -2140,7 +2171,7 @@ class Test(models.Model):
     def unaccepted_open_findings(self):
         from dojo.utils import get_system_setting
         findings = Finding.objects.filter(risk_accepted=False, active=True, duplicate=False, test=self)
-        if get_system_setting("enforce_verified_status", True):
+        if get_system_setting("enforce_verified_status", True) or get_system_setting("enforce_verified_status_metrics", True):
             findings = findings.filter(verified=True)
 
         return findings
@@ -2176,6 +2207,8 @@ class Test(models.Model):
             elif (self.scan_type in settings.HASHCODE_FIELDS_PER_SCANNER):
                 deduplicationLogger.debug(f"using HASHCODE_FIELDS_PER_SCANNER for scan_type: {self.scan_type}")
                 hashCodeFields = settings.HASHCODE_FIELDS_PER_SCANNER[self.scan_type]
+            else:
+                deduplicationLogger.warning(f"test_type name {self.test_type.name} and scan_type {self.scan_type} not found in HASHCODE_FIELDS_PER_SCANNER")
         else:
             deduplicationLogger.debug("Section HASHCODE_FIELDS_PER_SCANNER not found in settings.dist.py")
 
@@ -2202,7 +2235,10 @@ class Test(models.Model):
     def delete(self, *args, **kwargs):
         logger.debug("%d test delete", self.id)
         super().delete(*args, **kwargs)
-        calculate_grade(self.engagement.product)
+        with suppress(Engagement.DoesNotExist, Product.DoesNotExist):
+            # Suppressing a potential issue created from async delete removing
+            # related objects in a separate task
+            calculate_grade(self.engagement.product)
 
     @property
     def statistics(self):
@@ -2601,7 +2637,7 @@ class Finding(models.Model):
 
     tags = TagField(blank=True, force_lowercase=True, help_text=_("Add tags that help describe this finding. Choose from the list or add new tags. Press Enter key to add."))
     inherited_tags = TagField(blank=True, force_lowercase=True, help_text=_("Internal use tags sepcifically for maintaining parity with product. This field will be present as a subset in the tags field"))
-
+    
     SEVERITIES = {"Info": 4, "Low": 3, "Medium": 2,
                   "High": 1, "Critical": 0}
 
@@ -2642,11 +2678,22 @@ class Finding(models.Model):
             models.Index(fields=["duplicate_finding", "id"]),
         ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.unsaved_endpoints = []
+        self.unsaved_request = None
+        self.unsaved_response = None
+        self.unsaved_tags = None
+        self.unsaved_files = None
+        self.unsaved_vulnerability_ids = None
+        
+
     def __str__(self):
         return self.title
 
-    def save(self, dedupe_option=True, rules_option=True, product_grading_option=True,
-             issue_updater_option=True, push_to_jira=False, user=None, *args, **kwargs):
+    def save(self, dedupe_option=True, rules_option=True, product_grading_option=True,  # noqa: FBT002
+             issue_updater_option=True, push_to_jira=False, user=None, *args, **kwargs):  # noqa: FBT002 - this is bit hard to fix nice have this universally fixed
 
         from dojo.finding import helper as finding_helper
 
@@ -2688,14 +2735,13 @@ class Finding(models.Model):
             # so we call it manually
             finding_helper.update_finding_status(self, user, changed_fields={"id": (None, None)})
 
-        else:
-            # logger.debug('setting static / dynamic in save')
-            # need to have an id/pk before we can access endpoints
-            if (self.file_path is not None) and (self.endpoints.count() == 0):
-                self.static_finding = True
-                self.dynamic_finding = False
-            elif (self.file_path is not None):
-                self.static_finding = True
+        # logger.debug('setting static / dynamic in save')
+        # need to have an id/pk before we can access endpoints
+        elif (self.file_path is not None) and (self.endpoints.count() == 0):
+            self.static_finding = True
+            self.dynamic_finding = False
+        elif (self.file_path is not None):
+            self.static_finding = True
 
         # update the SLA expiration date last, after all other finding fields have been updated
         self.set_sla_expiration_date()
@@ -2718,18 +2764,8 @@ class Finding(models.Model):
         from django.urls import reverse
         return reverse("view_finding", args=[str(self.id)])
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.unsaved_endpoints = []
-        self.unsaved_request = None
-        self.unsaved_response = None
-        self.unsaved_tags = None
-        self.unsaved_files = None
-        self.unsaved_vulnerability_ids = None
-
     def copy(self, test=None):
-        copy = self
+        copy = _copy_model_util(self)
         # Save the necessary ManyToMany relationships
         old_notes = list(self.notes.all())
         old_files = list(self.files.all())
@@ -2738,8 +2774,6 @@ class Finding(models.Model):
         old_found_by = list(self.found_by.all())
         old_tags = list(self.tags.all())
         # Wipe the IDs of the new object
-        copy.pk = None
-        copy.id = None
         if test:
             copy.test = test
         # Save the object before setting any ManyToMany relationships
@@ -2764,17 +2798,24 @@ class Finding(models.Model):
 
     def delete(self, *args, **kwargs):
         logger.debug("%d finding delete", self.id)
-        import dojo.finding.helper as helper
+        from dojo.finding import helper
         helper.finding_delete(self)
+
+        # if self.risk and not self.risk.assessed_findings.exists():
+        #     self.risk.delete()
+        
         super().delete(*args, **kwargs)
-        calculate_grade(self.test.engagement.product)
+        with suppress(Test.DoesNotExist, Engagement.DoesNotExist, Product.DoesNotExist):
+            # Suppressing a potential issue created from async delete removing
+            # related objects in a separate task
+            calculate_grade(self.test.engagement.product)
 
     # only used by bulk risk acceptance api
     @classmethod
     def unaccepted_open_findings(cls):
         from dojo.utils import get_system_setting
         results = cls.objects.filter(active=True, duplicate=False, risk_accepted=False)
-        if get_system_setting("enforce_verified_status", True):
+        if get_system_setting("enforce_verified_status", True) or get_system_setting("enforce_verified_status_metrics", True):
             results = results.filter(verified=True)
 
         return results
@@ -2823,16 +2864,16 @@ class Finding(models.Model):
             if hashcodeField == "endpoints":
                 # For endpoints, need to compute the field
                 myEndpoints = self.get_endpoints()
-                fields_to_hash = fields_to_hash + myEndpoints
+                fields_to_hash += myEndpoints
                 deduplicationLogger.debug(hashcodeField + " : " + myEndpoints)
             elif hashcodeField == "vulnerability_ids":
                 # For vulnerability_ids, need to compute the field
                 my_vulnerability_ids = self.get_vulnerability_ids()
-                fields_to_hash = fields_to_hash + my_vulnerability_ids
+                fields_to_hash += my_vulnerability_ids
                 deduplicationLogger.debug(hashcodeField + " : " + my_vulnerability_ids)
             else:
                 # Generically use the finding attribute having the same name, converts to str in case it's integer
-                fields_to_hash = fields_to_hash + str(getattr(self, hashcodeField))
+                fields_to_hash += str(getattr(self, hashcodeField))
                 deduplicationLogger.debug(hashcodeField + " : " + str(getattr(self, hashcodeField)))
         deduplicationLogger.debug("compute_hash_code - fields_to_hash = " + fields_to_hash)
         return self.hash_fields(fields_to_hash)
@@ -2951,7 +2992,7 @@ class Finding(models.Model):
     @staticmethod
     def get_severity(num_severity):
         severities = {0: "Info", 1: "Low", 2: "Medium", 3: "High", 4: "Critical"}
-        if num_severity in severities.keys():
+        if num_severity in severities:
             return severities[num_severity]
 
         return None
@@ -3075,9 +3116,9 @@ class Finding(models.Model):
         try:
             # Attempt to access the github issue if it exists. If not, an exception will be caught
             _ = self.github_issue
-            return True
         except GITHUB_Issue.DoesNotExist:
             return False
+        return True
 
     def github_conf(self):
         try:
@@ -3236,7 +3277,7 @@ class Finding(models.Model):
     def git_public_prepare_scm_link(self, uri, scm_type):
         # if commit hash or branch/tag is set for engagement/test -
         # hash or branch/tag should be appended to base browser link
-        intermediate_path = "/blob/" if scm_type in ["github", "gitlab"] else "/src/"
+        intermediate_path = "/blob/" if scm_type in {"github", "gitlab"} else "/src/"
 
         link = self.scm_public_prepare_base_link(uri)
         if self.test.commit_hash:
@@ -3298,7 +3339,7 @@ class Finding(models.Model):
         if (self.test.engagement.source_code_management_uri is not None):
             if scm_type == "bitbucket-standalone":
                 link = self.bitbucket_standalone_prepare_scm_link(link)
-            elif scm_type in ["github", "gitlab", "gitea", "codeberg", "bitbucket"]:
+            elif scm_type in {"github", "gitlab", "gitea", "codeberg", "bitbucket"}:
                 link = self.git_public_prepare_scm_link(link, scm_type)
             elif "https://github.com/" in self.test.engagement.source_code_management_uri:
                 link = self.git_public_prepare_scm_link(link, "github")
@@ -3309,7 +3350,7 @@ class Finding(models.Model):
 
         # than - add line part to browser url
         if self.line:
-            if scm_type in ["github", "gitlab", "gitea", "codeberg"] or "https://github.com/" in self.test.engagement.source_code_management_uri:
+            if scm_type in {"github", "gitlab", "gitea", "codeberg"} or "https://github.com/" in self.test.engagement.source_code_management_uri:
                 link = link + "#L" + str(self.line)
             elif scm_type == "bitbucket-standalone":
                 link = link + "#" + str(self.line)
@@ -3369,15 +3410,20 @@ class Finding(models.Model):
         from dojo.utils import get_custom_method
         if hash_method := get_custom_method("FINDING_HASH_METHOD"):
             hash_method(self, dedupe_option)
-        else:
-            # Finding.save is called once from serializers.py with dedupe_option=False because the finding is not ready yet, for example the endpoints are not built
-            # It is then called a second time with dedupe_option defaulted to true; now we can compute the hash_code and run the deduplication
-            if dedupe_option:
-                if self.hash_code is not None:
-                    deduplicationLogger.debug("Hash_code already computed for finding")
-                else:
-                    self.hash_code = self.compute_hash_code()
-                    deduplicationLogger.debug("Hash_code computed for finding: %s", self.hash_code)
+        # Finding.save is called once from serializers.py with dedupe_option=False because the finding is not ready yet, for example the endpoints are not built
+        # It is then called a second time with dedupe_option defaulted to true; now we can compute the hash_code and run the deduplication
+        elif dedupe_option:
+            if self.hash_code is not None:
+                deduplicationLogger.debug("Hash_code already computed for finding")
+            else:
+                self.hash_code = self.compute_hash_code()
+                deduplicationLogger.debug("Hash_code computed for finding: %s", self.hash_code)
+
+
+class VulnerabilityFinding(Finding):
+        def __init__(self, test=None, vulnerability=None):
+            super().__init__(test=test)
+            self.vulnerability = vulnerability
 
 
 class FindingAdmin(admin.ModelAdmin):
@@ -3610,9 +3656,9 @@ class Check_List(models.Model):
 
     @staticmethod
     def get_status(pass_fail):
-        if pass_fail == "Pass":
+        if pass_fail == "Pass":  # noqa: S105
             return "success"
-        if pass_fail == "Fail":
+        if pass_fail == "Fail":  # noqa: S105
             return "danger"
         return "warning"
 
@@ -3655,7 +3701,7 @@ class Risk_Assessment(models.Model):
         ("N", "N - No Mitigation (Risk Accepted)"),
     ]
 
-    threat_types = MultiSelectField(choices=THREAT_TYPE_CHOICES, max_length=20)
+    threat_types = MultiSelectField(choices=THREAT_TYPE_CHOICES, max_length=5000, blank=True, null=True)
     mitigation_types = models.CharField(choices=MITIGATION_TYPE_CHOICES, max_length=1, default="D")
     name = models.CharField(max_length=300, null=False, blank=False)
     assessed_findings = models.ManyToManyField("dojo.Finding", related_name="risk_assessments")
@@ -3750,7 +3796,7 @@ class Risk_Acceptance(models.Model):
         # logger.debug('path: "%s"', self.path)
         if not self.path:
             return None
-        return os.path.basename(self.path.name)
+        return Path(self.path.name).name
 
     @property
     def name_and_expiration_info(self):
@@ -3777,13 +3823,10 @@ class Risk_Acceptance(models.Model):
         return None
 
     def copy(self, engagement=None):
-        copy = self
+        copy = _copy_model_util(self)
         # Save the necessary ManyToMany relationships
         old_notes = list(self.notes.all())
         old_accepted_findings_hash_codes = [finding.hash_code for finding in self.accepted_findings.all()]
-        # Wipe the IDs of the new object
-        copy.pk = None
-        copy.id = None
         # Save the object before setting any ManyToMany relationships
         copy.save()
         # Copy the notes
@@ -4678,7 +4721,7 @@ if settings.ENABLE_AUDITLOG:
     auditlog.register(Dojo_User, exclude_fields=["password"])
     auditlog.register(Endpoint)
     auditlog.register(Engagement)
-    auditlog.register(Finding)
+    auditlog.register(Finding, m2m_fields={"reviewers"})
     auditlog.register(Finding_Group)
     auditlog.register(Product_Type)
     auditlog.register(Product)
@@ -4687,6 +4730,7 @@ if settings.ENABLE_AUDITLOG:
     auditlog.register(Finding_Template)
     auditlog.register(Cred_User, exclude_fields=["password"])
     auditlog.register(Notification_Webhooks, exclude_fields=["header_name", "header_value"])
+
 
 from dojo.utils import calculate_grade, to_str_typed  # noqa: E402  # there is issue due to a circular import
 
@@ -4723,6 +4767,7 @@ admin.site.register(Language_Type)
 admin.site.register(App_Analysis)
 admin.site.register(Test)
 admin.site.register(Finding, FindingAdmin)
+admin.site.register(VulnerabilityFinding)
 admin.site.register(FileUpload)
 admin.site.register(FileAccessToken)
 admin.site.register(Stub_Finding)
