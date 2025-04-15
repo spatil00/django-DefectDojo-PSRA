@@ -171,7 +171,7 @@ class FindingStatusFilter(ChoiceFilter):
 
     def risk_accepted(self, qs, name):
         return qs.filter(ACCEPTED_FINDINGS_QUERY)
-    
+
     def risk_assessed(self, qs, name):
         return qs.filter(ASSESSED_FINDINGS_QUERY)
 
@@ -782,7 +782,7 @@ class ReportBooleanFilter(ChoiceFilter):
 
 
 class ReportRiskAssessedFilter(ChoiceFilter):
-    pass 
+    pass
 
 
 class ReportRiskAcceptanceFilter(ChoiceFilter):
@@ -793,7 +793,7 @@ class ReportRiskAcceptanceFilter(ChoiceFilter):
     def accepted(self, qs, name):
         # return qs.filter(risk_acceptance__isnull=False)
         return qs.filter(ACCEPTED_FINDINGS_QUERY)
-    
+
     def assessed(self, qs, name):
         return qs.filter(ASSESSED_FINDINGS_QUERY)
 

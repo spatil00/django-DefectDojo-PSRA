@@ -1,12 +1,11 @@
-# #  tests
-import os
-import environ
 import base64
 import logging
 import operator
 from datetime import datetime
 from functools import reduce
+from pathlib import Path
 
+import environ
 from django.contrib import messages
 from django.contrib.admin.utils import NestedObjects
 from django.core.exceptions import ValidationError
@@ -54,11 +53,11 @@ from dojo.models import (
     Finding_Template,
     Note_Type,
     Product_API_Scan_Configuration,
+    Product_File_Path,
     Stub_Finding,
     Test,
     Test_Import,
     Test_Import_Finding_Action,
-    Product_File_Path
 )
 from dojo.notifications.helper import create_notification
 from dojo.test.queries import get_authorized_tests
@@ -179,13 +178,12 @@ class ViewTest(View):
         #         risk.vector_string
         #         finding.vector_string = finding.risk.vector_string
         #     else:
-        #         finding.vector_string = ''  
+        #         finding.vector_string = ''
 
         return {
             "findings": paged_findings,
             "filtered": findings,
         }
-
 
     def get_note_form(self, request: HttpRequest):
         # Set up the args for the form
@@ -811,7 +809,6 @@ def add_temp_finding(request, tid, fid):
         if jira_helper.get_jira_project(test):
             jform = JIRAFindingForm(push_all=jira_helper.is_push_all_issues(test), prefix="jiraform", jira_project=jira_helper.get_jira_project(test), finding_form=form)
 
-    
     product_tab = Product_Tab(test.engagement.product, title=_("Add Finding"), tab="engagements")
     product_tab.setEngagement(test.engagement)
     return render(request, "dojo/add_findings.html",
@@ -959,19 +956,19 @@ class ReImportScanResultsView(View):
         """Process the form and manipulate the input in any way that is appropriate"""
         uploaded_file = request.FILES.get("file")
         # print(uploaded_file)
-        
+
         # Save the file if it exists
         if uploaded_file:
             try:
                 saved_file_path = self.save_uploaded_file(
-                    uploaded_file, 
-                    context=context
+                    uploaded_file,
+                    context=context,
                 )
                 # Optionally add the saved file path to the context for now
-                context['saved_file_path'] = saved_file_path
+                context["saved_file_path"] = saved_file_path
             except Exception as e:
-                return f"Error saving file: {str(e)}"
-            
+                return f"Error saving file: {e!s}"
+
         # Update the running context dict with cleaned form input
         context.update({
             "scan": request.FILES.get("file", None),
@@ -1006,7 +1003,7 @@ class ReImportScanResultsView(View):
         context.get("test").tags = context.get("tags")
         context.get("test").version = context.get("version")
         return None
-    
+
     def save_uploaded_file(
         self,
         uploaded_file,
@@ -1017,7 +1014,7 @@ class ReImportScanResultsView(View):
         with a folder named after the product_ID
         """
         root_path = environ.Path(__file__) - 3  # Three folders back
-        
+
         if context.get("test"):
             product = context.get("test").engagement.product
             product_id = product.id
@@ -1025,18 +1022,17 @@ class ReImportScanResultsView(View):
         else:
             product = None
             product_folder = "unknown_product"
-        
-        base_upload_dir = root_path('uploads', 'scan_reports', product_folder)
-        os.makedirs(base_upload_dir, exist_ok=True)
-                
+
+        base_upload_dir = root_path("uploads", "scan_reports", product_folder)
+        Path(base_upload_dir).mkdir(parents=True, exist_ok=True)
+
         filename = f"RiskAssessment_{product_id}.xlsx"
-        
-        file_path = os.path.join(base_upload_dir, filename)
-        
-        with open(file_path, 'wb+') as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
-        
+
+        file_path = Path(base_upload_dir) / filename
+
+        with open(file_path, "wb+") as destination:
+            destination.writelines(uploaded_file.chunks())
+
         if product:
             Product_File_Path.objects.create(product=product, product_file_path=file_path)
 

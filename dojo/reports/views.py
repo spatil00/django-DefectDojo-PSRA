@@ -1,12 +1,14 @@
-import os
-import environ
-import shutil
 import csv
 import logging
 import re
+import shutil
+import warnings
 from datetime import datetime
+from pathlib import Path
 from tempfile import NamedTemporaryFile
+from urllib.parse import parse_qs
 
+import environ
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
@@ -14,12 +16,8 @@ from django.http import Http404, HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views import View
-from django.contrib.staticfiles import finders
-from openpyxl import Workbook,load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
-import warnings
-
-from urllib.parse import urlparse, parse_qs
 
 from dojo.authorization.authorization import user_has_permission_or_403
 from dojo.authorization.authorization_decorators import user_is_authorized
@@ -34,7 +32,7 @@ from dojo.filters import (
 from dojo.finding.queries import get_authorized_findings
 from dojo.finding.views import BaseListFindings
 from dojo.forms import ReportOptionsForm
-from dojo.models import Dojo_User, Endpoint, Engagement, Finding, Product, Product_Type, Test,Risk_Assessment
+from dojo.models import Dojo_User, Endpoint, Engagement, Finding, Product, Product_Type, Risk_Assessment, Test
 from dojo.reports.widgets import (
     CoverPage,
     CustomReportJsonForm,
@@ -1134,7 +1132,6 @@ class PSRAExcelExportView(View):
 
     def get_test(self, test_id: int):
         return get_object_or_404(Test, id=test_id)
-    
 
     def initialize_factors_with_dash(self, worksheet, row):
         """Initialize cells corresponding to factors in factors_to_mark_with_x with '-'."""
@@ -1142,29 +1139,28 @@ class PSRAExcelExportView(View):
             column_letter = self.factor_columns.get(factor)
             if column_letter:
                 cell_ref = f"{column_letter}{row}"
-                worksheet[cell_ref].value = '-'
+                worksheet[cell_ref].value = "-"
 
-    
     def add_findings_data(self):
         return self.findings
-    
+
     # List of factors that should be marked with 'x' if present
     factors_to_mark_with_x = {
-        "SR", "AT", "OS", "HD", "SF", "IN", "MC", "IO", "IS", "TI", "CU", "SA", 
-        "ND", "EN", "AA", "SD", "PD", "HN", "ATD", "CF", "SS", "HW", "RE", "RM", 
-        "LD", "PDN", "PS", "PR", "NW", "AD"
+        "SR", "AT", "OS", "HD", "SF", "IN", "MC", "IO", "IS", "TI", "CU", "SA",
+        "ND", "EN", "AA", "SD", "PD", "HN", "ATD", "CF", "SS", "HW", "RE", "RM",
+        "LD", "PDN", "PS", "PR", "NW", "AD",
     }
 
     def parse_vector_string(self, vector_string):
         """Parse a vector string into a dictionary of factor-value pairs, ignoring case for factor codes."""
         vector_string = vector_string.replace("PSRA:1.0 ", "", 1).strip()
         factor_values = {}
-        
+
         for pair in vector_string.split("/"):
-            if ':' in pair:
-                factor, value = map(str.strip, pair.split(':', 1))
+            if ":" in pair:
+                factor, value = map(str.strip, pair.split(":", 1))
                 factor_values[factor.upper()] = value.strip()
-        
+
         return factor_values
 
     def fill_finding_row(self, worksheet, factor_values, row):
@@ -1172,41 +1168,40 @@ class PSRAExcelExportView(View):
             column_letter = self.factor_columns.get(factor_code.upper())
             if column_letter:
                 cell_ref = f"{column_letter}{row}"
-                
+
                 # If factor code is in `factors_as_x`, set value as 'x'
                 if factor_code.upper() in self.factors_to_mark_with_x:
-                    worksheet[cell_ref].value = 'X'
+                    worksheet[cell_ref].value = "X"
                 else:
                     # Strip special characters and whitespace from the value
                     clean_value = value.strip().strip("'")  # Removes whitespace and single quotes
-                    
+
                     # Convert to integer if it's a numeric string; otherwise, keep it as a string
                     try:
                         worksheet[cell_ref].value = int(clean_value) if clean_value.isdigit() else clean_value
                     except ValueError:
                         worksheet[cell_ref].value = clean_value  # Assign directly if non-numeric
-    
-    def set_threat_type(self,rmm_worksheet, idx, threat_types):
+
+    def set_threat_type(self, rmm_worksheet, idx, threat_types):
         # Mapping individual threat types to their respective column indexes
         threat_mapping = {
-            'S': 'M',  # Spoofing
-            'T': 'N',  # Tampering
-            'R': 'O',  # Repudiation
-            'I': 'P',  # Information Disclosure
-            'D': 'Q',  # Denial of Service
-            'E': 'R'   # Elevation of Privilege
+            "S": "M",  # Spoofing
+            "T": "N",  # Tampering
+            "R": "O",  # Repudiation
+            "I": "P",  # Information Disclosure
+            "D": "Q",  # Denial of Service
+            "E": "R",   # Elevation of Privilege
         }
 
         # First, set all cells in M to R to '-'
         for col in threat_mapping.values():
-            rmm_worksheet[f"{col}{idx}"] = '-'
-        
-        # Split the comma-separated threat types and set the respective cells to 'X'
-        for threat in threat_types:
-            threat = threat.strip()  # Ensure there are no spaces
-            if threat in threat_mapping:
-                rmm_worksheet[f"{threat_mapping[threat]}{idx}"] = 'X'
+            rmm_worksheet[f"{col}{idx}"] = "-"
 
+        # Split the comma-separated threat types and set the respective cells to 'X'
+        for threat_item in threat_types:
+            clean_threat = threat_item.strip()  # Ensure there are no spaces
+            if clean_threat in threat_mapping:
+                rmm_worksheet[f"{threat_mapping[clean_threat]}{idx}"] = "X"
 
     def get(self, request, test_id=None):
         warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl.worksheet._reader")
@@ -1221,11 +1216,11 @@ class PSRAExcelExportView(View):
             product_id = request.GET.get("product_id")
 
             try:
-                url_parts = raw_url.split('?')
+                url_parts = raw_url.split("?")
                 base_path = url_parts[0]
 
                 if not product_id:
-                    match = re.search(r'/product/(\d+)/', base_path)
+                    match = re.search(r"/product/(\d+)/", base_path)
                     if match:
                         product_id = match.group(1)
 
@@ -1246,19 +1241,19 @@ class PSRAExcelExportView(View):
                     request.GET = get_copy
 
             except (ValueError, TypeError) as e:
-                logger.error(f"Error parsing URL: {raw_url}. Error: {str(e)}")
+                logger.error(f"Error parsing URL: {raw_url}. Error: {e!s}")
                 return HttpResponse(f"Invalid URL: {raw_url}", status=400)
 
         pid = product.id
-        root_path = environ.Path(__file__) - 3  # Three folders back 
+        root_path = environ.Path(__file__) - 3  # Three folders back
         product_folder = f"product_{pid}"
-        base_upload_dir = root_path('uploads', 'scan_reports', product_folder)
+        base_upload_dir = root_path("uploads", "scan_reports", product_folder)
 
-        os.makedirs(base_upload_dir, exist_ok=True)
-        existing_file_path = os.path.join(base_upload_dir, f"RiskAssessment_{pid}.xlsx")
+        Path(base_upload_dir).mkdir(parents=True, exist_ok=True)
+        existing_file_path = Path(base_upload_dir) / f"RiskAssessment_{pid}.xlsx"
 
-        if not os.path.exists(existing_file_path):
-            template_path = root_path('uploads', 'PSRA/PSRA template.xlsx')
+        if not Path(existing_file_path).exists():
+            template_path = root_path("uploads", "PSRA/PSRA template.xlsx")
             # template_path = f"{settings.STATIC_ROOT}/PSRA/PSRA template.xlsx"
             shutil.copy(template_path, existing_file_path)
 
@@ -1273,13 +1268,13 @@ class PSRAExcelExportView(View):
         start_row = 4
         for idx, finding in enumerate(findings, start=start_row):
             risk_assessment = Risk_Assessment.objects.filter(assessed_findings=finding).first()
-            if risk_assessment is None: 
+            if risk_assessment is None:
                 continue
-            
+
             vector_string = risk_assessment.vector_string
             if not vector_string:
                 continue
-            
+
             vulnerability_description = finding.description
             threat_description = risk_assessment.threat_description
             risk_statement = risk_assessment.risk_statement
@@ -1290,13 +1285,13 @@ class PSRAExcelExportView(View):
             accepted_risk = finding.risk_accepted
             mitigation_type = risk_assessment.mitigation_types
             mitigation_reference = risk_assessment.mitigation_reference
-            
+
             self.set_threat_type(rmm_worksheet, idx, threat_types)
             self.initialize_factors_with_dash(rmm_worksheet, idx)
             factor_values = self.parse_vector_string(vector_string)
             self.fill_finding_row(rmm_worksheet, factor_values, idx)
 
-            rmm_worksheet[f"B{idx}"] = "V"+str(finding.id)
+            rmm_worksheet[f"B{idx}"] = "V" + str(finding.id)
             rmm_worksheet[f"C{idx}"] = vulnerability_description
             rmm_worksheet[f"K{idx}"] = threat_description
             rmm_worksheet[f"L{idx}"] = risk_statement
@@ -1305,21 +1300,18 @@ class PSRAExcelExportView(View):
             rmm_worksheet[f"CE{idx}"] = rationale_and_actions
             rmm_worksheet[f"CD{idx}"] = "Yes" if accepted_risk else "No"
 
-            mitigation_worksheet[f"A{idx-2}"] = "M"+str(finding.id)
-            mitigation_worksheet[f"B{idx-2}"] = finding.mitigation
-            mitigation_worksheet[f"C{idx-2}"] = mitigation_type
-            mitigation_worksheet[f"D{idx-2}"] = mitigation_reference
-            rmm_worksheet[f"BI{idx}"] = "M"+str(finding.id)
+            mitigation_worksheet[f"A{idx - 2}"] = "M" + str(finding.id)
+            mitigation_worksheet[f"B{idx - 2}"] = finding.mitigation
+            mitigation_worksheet[f"C{idx - 2}"] = mitigation_type
+            mitigation_worksheet[f"D{idx - 2}"] = mitigation_reference
+            rmm_worksheet[f"BI{idx}"] = "M" + str(finding.id)
 
         workbook.save(existing_file_path)
 
-        with open(existing_file_path, 'rb') as file:
-            response = HttpResponse(
-                file.read(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-            response['Content-Disposition'] = f'attachment; filename="RiskAssessment_{pid}.xlsx"'
-        
+        response = HttpResponse(
+            Path(existing_file_path).read_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="RiskAssessment_{pid}.xlsx"'
+
         return response
-
-

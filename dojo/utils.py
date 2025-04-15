@@ -61,10 +61,10 @@ from dojo.models import (
     Languages,
     Notifications,
     Product,
+    Product_File_Path,
     System_Settings,
     Test,
     User,
-    Product_File_Path
 )
 from dojo.notifications.helper import create_notification
 
@@ -2356,7 +2356,7 @@ class async_delete:
                 (Finding, "test__engagement__product"),
                 (Test, "engagement__product"),
                 (Engagement, "product"),
-                (Product_File_Path, "product"),],
+                (Product_File_Path, "product")],
             "Engagement": [
                 (Finding, "test__engagement"),
                 (Test, "engagement")],
