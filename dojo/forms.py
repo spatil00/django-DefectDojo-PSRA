@@ -594,7 +594,7 @@ class ImportScanForm(forms.Form):
         file_path = Path(base_upload_dir) / filename
 
         # Save the file
-        with open(file_path, "wb+") as destination:
+        with file_path.open("wb+") as destination:
             destination.writelines(file.chunks())
 
         return file_path

@@ -1030,7 +1030,7 @@ class ReImportScanResultsView(View):
 
         file_path = Path(base_upload_dir) / filename
 
-        with open(file_path, "wb+") as destination:
+        with file_path.open("wb+") as destination:
             destination.writelines(uploaded_file.chunks())
 
         if product:
