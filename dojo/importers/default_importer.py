@@ -86,7 +86,7 @@ class DefaultImporter(BaseImporter, DefaultImporterOptions):
         scan: TemporaryUploadedFile,
         *args: list,
         **kwargs: dict,
-    ) -> tuple[Test, int, int, int, int, int, Test_Import]: # tuple[Test, int, int, int, int, int, Test_Import, list]:
+    ) -> tuple[Test, int, int, int, int, int, Test_Import]:  # tuple[Test, int, int, int, int, int, Test_Import, list]:
         """
         The full step process of taking a scan report, and converting it to
         findings in the database. This entails the the following actions:
@@ -148,7 +148,7 @@ class DefaultImporter(BaseImporter, DefaultImporterOptions):
         logger.debug("IMPORT_SCAN: Updating Test progress")
         self.update_test_progress()
         logger.debug("IMPORT_SCAN: Done")
-        return self.test, 0, len(new_findings), len(closed_findings), 0, 0, test_import_history # new_findings
+        return self.test, 0, len(new_findings), len(closed_findings), 0, 0, test_import_history  # new_findings
 
     def process_findings(
         self,

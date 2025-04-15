@@ -1,34 +1,31 @@
-import hashlib
-import json
 
-from urllib.parse import urlparse
-from dojo.models import Endpoint, Finding
-from cvss.cvss3 import CVSS3
 from docx import Document
 
-class PhilipsSecurityTestReportParser(object):
-    """
-    Security testing report for Philips devices from Security Center of Excellence (SCoE)
-    """
+from dojo.models import Finding
+
+
+class PhilipsSecurityTestReportParser:
+
+    """Security testing report for Philips devices from Security Center of Excellence (SCoE)"""
 
     @staticmethod
     def extract_vulnerability_report(doc_path, start_title):
         # Load the Word document
         doc = Document(doc_path)
-        
+
         # Initialize variables
         extracting = False
         report_data = {
             "paragraphs": [],
-            "tables": []
+            "tables": [],
         }
-        
+
         # Iterate through paragraphs in the document to find the start title
         for para in doc.paragraphs:
             if start_title in para.text:
                 extracting = True
                 break
-        
+
         # If the start title is found, iterate through tables in the document
         if extracting:
             for table in doc.tables:
@@ -41,7 +38,7 @@ class PhilipsSecurityTestReportParser(object):
                         row_data = [cell.text for cell in row.cells]
                         table_data.append(row_data)
                     report_data["tables"].append(table_data)
-      
+
         return report_data
 
     def get_scan_types(self):
@@ -54,13 +51,13 @@ class PhilipsSecurityTestReportParser(object):
         return "Philips Security Test Report report file can be imported in docx format."
 
     def get_findings(self, file, test):
-        start_title = 'Detailed Vulnerability Report'
+        start_title = "Detailed Vulnerability Report"
         data = self.extract_vulnerability_report(file, start_title)
         findings = []
-        
+
         for vulnerability in data["tables"]:
             vulnerability_info = {}
-            
+
             # Process each key-value pair in the vulnerability
             for item in vulnerability:
                 key = item[0]
@@ -73,7 +70,7 @@ class PhilipsSecurityTestReportParser(object):
                     vulnerability_info["CVSS Vector"] = cvss_vector
                 else:
                     vulnerability_info[key] = value
-  
+
             find = Finding(
                 title=vulnerability_info["Vulnerability Title"],
                 test=test,
@@ -85,16 +82,15 @@ class PhilipsSecurityTestReportParser(object):
                 static_finding=True,
             )
             findings.append(find)
-        
+
         return findings
 
     def convert_severity(self, num_severity):
         """Convert severity value"""
         if num_severity >= -10:
             return "Low"
-        elif -11 >= num_severity > -26:
+        if -11 >= num_severity > -26:
             return "Medium"
-        elif num_severity <= -26:
+        if num_severity <= -26:
             return "High"
-        else:
-            return "Info"
+        return "Info"

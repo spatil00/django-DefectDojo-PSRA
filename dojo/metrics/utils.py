@@ -23,7 +23,12 @@ from dojo.filters import (
     MetricsFindingFilter,
     MetricsFindingFilterWithoutObjectLookups,
 )
-from dojo.finding.helper import ACCEPTED_FINDINGS_QUERY, CLOSED_FINDINGS_QUERY, OPEN_FINDINGS_QUERY, ASSESSED_FINDINGS_QUERY
+from dojo.finding.helper import (
+    ACCEPTED_FINDINGS_QUERY,
+    ASSESSED_FINDINGS_QUERY,
+    CLOSED_FINDINGS_QUERY,
+    OPEN_FINDINGS_QUERY,
+)
 from dojo.finding.queries import get_authorized_findings
 from dojo.models import Endpoint_Status, Finding, Product_Type
 from dojo.product.queries import get_authorized_products
@@ -79,7 +84,7 @@ def finding_queries(
     # Get the list of closed and risk accepted findings
     closed_filtered_findings = all_findings_within_date_range.filter(CLOSED_FINDINGS_QUERY)
     accepted_filtered_findings = all_findings_within_date_range.filter(ACCEPTED_FINDINGS_QUERY)
-    assessed_filtered_findings = all_findings_within_date_range.filter(ASSESSED_FINDING_QUERY)
+    assessed_filtered_findings = all_findings_within_date_range.filter(ASSESSED_FINDINGS_QUERY)
     active_filtered_findings = all_findings_within_date_range.filter(OPEN_FINDINGS_QUERY)
 
     # filter by product type if applicable

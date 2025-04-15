@@ -443,31 +443,31 @@ def finding_delete(instance, **kwargs):
 
 # def finding_delete(instance, **kwargs):
 #     logger.debug("finding delete, instance: %s", instance.id)
-    
+
 #     try:
 #         instance.refresh_from_db()
 #     except Finding.DoesNotExist:
 #         # due to cascading deletes, the current finding could have been deleted already
 #         # but django still calls delete() in this case
 #         return
-    
+
 #     # Handle Risk Assessment deletion
 #     if instance.risk:
 #         risk_assessment = instance.risk
 #         # Remove this finding from the risk assessment's assessed findings
 #         risk_assessment.assessed_findings.remove(instance)
-        
+
 #         # If no more findings are associated with this risk assessment, delete it
 #         if risk_assessment.assessed_findings.count() == 0:
 #             logger.debug("Deleting risk assessment %d as no findings are associated", risk_assessment.id)
 #             risk_assessment.delete()
-    
+
 #     duplicate_cluster = instance.original_finding.all()
 #     if duplicate_cluster:
 #         reconfigure_duplicate_cluster(instance, duplicate_cluster)
 #     else:
 #         logger.debug("no duplicate cluster found for finding: %d, so no need to reconfigure", instance.id)
-    
+
 #     logger.debug("finding delete: clearing found by")
 #     instance.found_by.clear()
 

@@ -1,5 +1,3 @@
-import os
-import environ
 import csv
 import logging
 import mimetypes
@@ -7,9 +5,11 @@ import operator
 import re
 from datetime import datetime
 from functools import reduce
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 from time import strftime
 
+import environ
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.utils import NestedObjects
@@ -18,10 +18,9 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DEFAULT_DB_ALIAS
 from django.db.models import Count, Q
 from django.db.models.query import Prefetch, QuerySet
-from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, QueryDict, StreamingHttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect, QueryDict, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import Resolver404, reverse
-from django.http import Http404, HttpResponseRedirect
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
@@ -49,7 +48,7 @@ from dojo.filters import (
     ProductEngagementsFilter,
     ProductEngagementsFilterWithoutObjectLookups,
 )
-from dojo.finding.helper import NOT_ACCEPTED_FINDINGS_QUERY, NOT_ASSESSED_FINDING_QUERY, ASSESSED_FINDINGS_QUERY
+from dojo.finding.helper import ASSESSED_FINDINGS_QUERY, NOT_ACCEPTED_FINDINGS_QUERY, NOT_ASSESSED_FINDING_QUERY
 from dojo.finding.views import find_available_notetypes
 from dojo.forms import (
     AddFindingsRiskAcceptanceForm,
@@ -67,7 +66,6 @@ from dojo.forms import (
     ReplaceRiskAcceptanceProofForm,
     RiskAcceptanceForm,
     RiskAssessmentForm,
-    EditRiskAssessmentForm,
     TestForm,
     TypedNoteForm,
     UploadThreatForm,
@@ -86,12 +84,12 @@ from dojo.models import (
     Notes,
     Product,
     Product_API_Scan_Configuration,
+    Product_File_Path,
     Risk_Acceptance,
     Risk_Assessment,
     System_Settings,
     Test,
     Test_Import,
-    Product_File_Path
 )
 from dojo.notifications.helper import create_notification
 from dojo.product.queries import get_authorized_products
@@ -348,7 +346,7 @@ def delete_engagement(request, eid):
             form = DeleteEngagementForm(request.POST, instance=engagement)
             if form.is_valid():
                 product = engagement.product
-                
+
                 file_paths = Product_File_Path.objects.filter(product=product)
                 for file_path in file_paths:
                     file_path.delete()  # Calls the overridden delete() method that removes files
@@ -382,6 +380,7 @@ def delete_engagement(request, eid):
         "form": form,
         "rels": rels,
     })
+
 
 @user_is_authorized(Engagement, Permissions.Engagement_Edit, "eid")
 def copy_engagement(request, eid):
@@ -703,7 +702,6 @@ def add_tests(request, eid):
 class ImportScanResultsView(View):
     def get_template(self) -> str:
         """Returns the template that will be presented to the user"""
-        print("HERE AT THE SCAN TEMPLATE")
         return "dojo/import_scan_results.html"
 
     def get_development_environment(
@@ -715,7 +713,6 @@ class ImportScanResultsView(View):
         - GET: Environment "Development" by default
         - POST: The label supplied by the user, with Development as a backup
         """
-        print("CHECKING ENVIRONMENT")
         return Development_Environment.objects.filter(name=environment_name).first()
 
     def get_engagement_or_product(
@@ -941,12 +938,11 @@ class ImportScanResultsView(View):
                 finding_count=finding_count,
                 closed_finding_count=closed_finding_count,
             ))
-                        
+
         except Exception as e:
             logger.exception("An exception error occurred during the report import")
             return f"An exception error occurred during the report import: {e}"
         return None
-
 
     def process_form(
         self,
@@ -957,18 +953,18 @@ class ImportScanResultsView(View):
         """Process the form and manipulate the input in any way that is appropriate"""
         uploaded_file = request.FILES.get("file")
         # print(uploaded_file)
-        
+
         # Save the file if it exists
         if uploaded_file:
             try:
                 saved_file_path = self.save_uploaded_file(
-                    uploaded_file, 
-                    context=context
+                    uploaded_file,
+                    context=context,
                 )
                 # Optionally add the saved file path to the context for now
-                context['saved_file_path'] = saved_file_path
+                context["saved_file_path"] = saved_file_path
             except Exception as e:
-                return f"Error saving file: {str(e)}"
+                return f"Error saving file: {e!s}"
         # Update the running context dict with cleaned form input
         context.update({
             "scan": request.FILES.get("file", None),
@@ -1015,7 +1011,6 @@ class ImportScanResultsView(View):
             elif verifiedChoice == "force_to_false":
                 context["verified"] = False
         return None
-    
 
     def save_uploaded_file(
         self,
@@ -1027,7 +1022,7 @@ class ImportScanResultsView(View):
         with a folder named after the product_ID
         """
         root_path = environ.Path(__file__) - 3  # Three folders back
-        
+
         if context.get("engagement"):
             product = context.get("engagement").product
             product_id = context.get("engagement").product_id
@@ -1035,24 +1030,21 @@ class ImportScanResultsView(View):
         else:
             product = None
             product_folder = "unknown_product"
-        
-        base_upload_dir = root_path('uploads', 'scan_reports', product_folder)
-        os.makedirs(base_upload_dir, exist_ok=True)
-                
+
+        base_upload_dir = root_path("uploads", "scan_reports", product_folder)
+        Path(base_upload_dir).mkdir(parents=True, exist_ok=True)
+
         filename = f"RiskAssessment_{product_id}.xlsx"
-        
-        file_path = os.path.join(base_upload_dir, filename)
-        
-        with open(file_path, 'wb+') as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
-        
+
+        file_path = Path(base_upload_dir) / filename
+
+        with file_path.open("wb+") as destination:
+            destination.writelines(uploaded_file.chunks())
+
         if product:
             Product_File_Path.objects.create(product=product, product_file_path=file_path)
 
         return file_path
-
-
 
     def process_jira_form(
         self,
@@ -1242,7 +1234,7 @@ def complete_checklist(request, eid):
     })
 
 
-#---------------------------Risk Assessment ----------------------------
+# ---------------------------Risk Assessment ----------------------------
 @user_is_authorized(Engagement, Permissions.Risk_Assessment, "eid")
 def add_risk_assessment(request, eid, fid=None):
     eng = get_object_or_404(Engagement, id=eid)
@@ -1252,75 +1244,89 @@ def add_risk_assessment(request, eid, fid=None):
 
     if not eng.product.enable_risk_assessment:
         raise PermissionDenied
-    
+
     if request.method == "POST":
         form = RiskAssessmentForm(request.POST)
         if form.is_valid():
-            try: 
-               risk_assessment =  form.save()
-            except Exception as e:
+            try:
+                risk_assessment = form.save()
+            except Exception:
                 logger.debug(vars(request.POST))
                 logger.error(vars(form))
-                logger.exception(e)
+                logger.exception("Exception occurred while saving risk assessment")
                 raise
-            
+
             findings = form.cleaned_data["assessed_findings"]
-            risk_assessment = rassess_helper.add_findings_to_risk_assessment(request.user, risk_assessment,findings)
+            risk_assessment = rassess_helper.add_findings_to_risk_assessment(
+                request.user, risk_assessment, findings,
+            )
 
             messages.add_message(
                 request,
                 messages.SUCCESS,
                 "Risk assessment saved.",
-                extra_tags="alert-success")
-            
-            return redirect_to_return_url_or_else(request, reverse("view_engagement", args=(eid, )))
+                extra_tags="alert-success",
+            )
+
+            return redirect_to_return_url_or_else(
+                request, reverse("view_engagement", args=(eid)),
+            )
     else:
         risk_assessment_title_suggestion = f"Assess: {finding}"
         risk_assessment_finding_descrption = finding.description
         risk_assessment_finding_mitigation = finding.mitigation
-        
-        form  = RiskAssessmentForm(initial={"owner": request.user, 
-                                            "name": risk_assessment_title_suggestion,
-                                            "finding_description":risk_assessment_finding_descrption,
-                                            "finding_mitigation":risk_assessment_finding_mitigation})
+
+        form = RiskAssessmentForm(
+            initial={
+                "owner": request.user,
+                "name": risk_assessment_title_suggestion,
+                "finding_description": risk_assessment_finding_descrption,
+                "finding_mitigation": risk_assessment_finding_mitigation,
+            },
+        )
         if finding.risk_accepted:
             form.accept_risk = True
-        else: 
+        else:
             form.accept_risk = False
 
-    finding_choices = Finding.objects.filter(duplicate=False, test__engagement=eng).filter(NOT_ASSESSED_FINDING_QUERY).order_by("title")
+    finding_choices = (
+        Finding.objects.filter(duplicate=False, test__engagement=eng)
+        .filter(NOT_ASSESSED_FINDING_QUERY)
+        .order_by("title")
+    )
     form.fields["assessed_findings"].queryset = finding_choices
 
     if fid:
         form.fields["assessed_findings"].initial = {fid}
-    
+
     product_tab = Product_Tab(eng.product, title="Risk Assessment", tab="engagements")
     product_tab.setEngagement(eng)
-    
-    return render(request, "dojo/add_risk_assessment.html",{
-        "eng":eng,
-        "product_tab":product_tab,
-        "form":form,
-    })
+
+    return render(
+        request,
+        "dojo/add_risk_assessment.html",
+        {
+            "eng": eng,
+            "product_tab": product_tab,
+            "form": form,
+        },
+    )
 
 
 @user_is_authorized(Engagement, Permissions.Risk_Assessment, "eid")
 def view_risk_assessment(request, eid, raid):
-    print("EID: ", eid, " RAID: ", raid)
     return view_edit_risk_assessment(request, eid=eid, raid=raid, edit_mode=False)
+
 
 @user_is_authorized(Engagement, Permissions.Risk_Assessment, "eid")
 def edit_risk_assessment(request, eid, fid):
     return view_edit_risk_assessment(request, eid=eid, fid=fid, edit_mode=False)
 
 
-
 @user_is_authorized(Engagement, Permissions.Risk_Assessment, "eid")
-def view_edit_risk_assessment(request, eid, fid, edit_mode=False):
-    print("EID: ", eid, " FID: ", fid)
-
+def view_edit_risk_assessment(request, eid, fid, *, edit_mode=False):
     finding = get_object_or_404(Finding, pk=fid)
-    
+
     eng = get_object_or_404(Engagement, pk=eid)
 
     if edit_mode and not eng.product.enable_risk_assessment:
@@ -1332,10 +1338,10 @@ def view_edit_risk_assessment(request, eid, fid, edit_mode=False):
         if form.is_valid():
             try:
                 risk_assessment = form.save()
-            except Exception as e:
+            except Exception:
                 logger.debug(vars(request.POST))
                 logger.error(vars(form))
-                logger.exception(e)
+                logger.exception("Exception occurred while saving risk assessment")
                 raise
             findings = form.cleaned_data["assessed_findings"]
             risk_assessment = rassess_helper.add_findings_to_risk_assessment(request.user, risk_assessment, findings)
@@ -1344,36 +1350,36 @@ def view_edit_risk_assessment(request, eid, fid, edit_mode=False):
                 messages.SUCCESS,
                 "Risk assessment saved.",
                 extra_tags="alert-success")
-            return redirect_to_return_url_or_else(request, reverse("view_product", args=(eng.product.id, )))    
+            return redirect_to_return_url_or_else(request, reverse("view_product", args=(eng.product.id, )))
 
     else:
         # Get the associated Risk_Assessment for this Finding and Engagement
-        #risk_assessment = Risk_Assessment.objects.filter(assessed_findings=finding).first()
-        #title_suggestion = f"Edit: {finding}"
-        #finding_description = finding.description
-        #finding_mitigation = finding.mitigation
-        #threat_description = risk_assessment.threat_description
-        #vector_string = risk_assessment.vector_string
-        #risk_statment = risk_assessment.risk_statement
-        #related_hazard = risk_assessment.related_hazard_item
-        #rational_action = risk_assessment.rational_and_actions
+        # risk_assessment = Risk_Assessment.objects.filter(assessed_findings=finding).first()
+        # title_suggestion = f"Edit: {finding}"
+        # finding_description = finding.description
+        # finding_mitigation = finding.mitigation
+        # threat_description = risk_assessment.threat_description
+        # vector_string = risk_assessment.vector_string
+        # risk_statment = risk_assessment.risk_statement
+        # related_hazard = risk_assessment.related_hazard_item
+        # rational_action = risk_assessment.rational_and_actions
 
-        '''form = RiskAssessmentForm(initial={"owner": request.user, 
-                         "name": title_suggestion, 
+        """form = RiskAssessmentForm(initial={"owner": request.user,
+                         "name": title_suggestion,
                          "finding_description": finding_description,
-                         "vector_string": vector_string,  
+                         "vector_string": vector_string,
                          "threat_description": threat_description,
                          "risk_statment": risk_statment,
                          "related_hazard_item": related_hazard,
                          "finding_mitigation": finding_mitigation,
-                         "rational_and_action":rational_action})'''
+                         "rational_and_action":rational_action})"""
         initial_data = {
-            'finding_description': finding.description,
-            'finding_mitigation': finding.mitigation,
-            'accept_risk': finding.risk_accepted,
+            "finding_description": finding.description,
+            "finding_mitigation": finding.mitigation,
+            "accept_risk": finding.risk_accepted,
         }
-        form = RiskAssessmentForm(instance=risk_assessment,initial=initial_data)
-        product  = eng.product
+        form = RiskAssessmentForm(instance=risk_assessment, initial=initial_data)
+        product = eng.product
         finding_choices = Finding.objects.filter(duplicate=False, test__engagement__product=product).filter(ASSESSED_FINDINGS_QUERY).order_by("title")
         form.fields["assessed_findings"].queryset = finding_choices
 
@@ -1382,19 +1388,21 @@ def view_edit_risk_assessment(request, eid, fid, edit_mode=False):
 
         product_tab = Product_Tab(eng.product, title="Risk Assessment", tab="engagements")
         product_tab.setEngagement(eng)
-        
-        #if not risk_assessment:
+
+        # if not risk_assessment:
         #    raise Http404("Risk assessment for this finding does not exist.")
-  
+
         return render(
         request, "dojo/add_risk_assessment.html", {
-                "eng":eng,
+                "eng": eng,
                 "product_tab": product_tab,
                 "form": form,
                 "finding": finding,
                 "edit_mode": edit_mode,
             })
-        
+
+    return Http404("Invalid request method.")
+
 
 @user_is_authorized(Engagement, Permissions.Risk_Assessment, "eid")
 def delete_risk_assessment(request, eid, fid):
@@ -1412,8 +1420,8 @@ def delete_risk_assessment(request, eid, fid):
         extra_tags="alert-success")
     return HttpResponseRedirect(reverse("view_engagement", args=(eng.id, )))
 
-#----------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------
 @user_is_authorized(Engagement, Permissions.Risk_Acceptance, "eid")
 def add_risk_acceptance(request, eid, fid=None):
     eng = get_object_or_404(Engagement, id=eid)
@@ -1911,6 +1919,7 @@ def excel_export(request):
     response["Content-Disposition"] = "attachment; filename=engagements.xlsx"
     logger.debug("done with excel export")
     return response
+
 
 def psra_excel_report(request):
     pass

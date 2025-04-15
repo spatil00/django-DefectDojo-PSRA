@@ -1,14 +1,14 @@
 from auditlog.models import LogEntry
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
-from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.translation import gettext as _
 
-from dojo.models import Engagement, Finding, Risk_Assessment
-from dojo.notes.helper import delete_related_notes
+from dojo.models import Engagement
 from dojo.notifications.helper import create_notification
+
 
 @receiver(post_save, sender=Engagement)
 def engagement_post_save(sender, instance, created, **kwargs):
@@ -55,5 +55,3 @@ def engagement_post_delete(sender, instance, using, origin, **kwargs):
                             url=reverse("view_product", args=(instance.product.id, )),
                             recipients=[instance.lead],
                             icon="exclamation-triangle")
-
-

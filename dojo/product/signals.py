@@ -9,8 +9,6 @@ from django.utils.translation import gettext as _
 from dojo.models import Product
 from dojo.notifications.helper import create_notification
 
-from dojo.models import Engagement, Test, Test_Type
-
 
 @receiver(post_save, sender=Product)
 def product_post_save(sender, instance, created, **kwargs):
@@ -59,7 +57,7 @@ def product_post_delete(sender, instance, **kwargs):
 #                 default_test_type = Test_Type.objects.get(name="Philips RMM Scan")
 #                 print("HELLO SIGNAL 2")
 #                 print("DEFAULT TEST TYPE", default_test_type)
-                
+
 #                 test = Test(
 #                     engagement=instance,
 #                     test_type=default_test_type,
@@ -71,7 +69,7 @@ def product_post_delete(sender, instance, **kwargs):
 #                 import logging
 #                 logger = logging.getLogger(__name__)
 #                 logger.debug(f"Default scan created for engagement {instance.id}")
-            
+
 #         except Test_Type.DoesNotExist:
 #             import logging
 #             logger = logging.getLogger(__name__)

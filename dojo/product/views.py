@@ -84,13 +84,13 @@ from dojo.models import (
     Notifications,
     Product,
     Product_API_Scan_Configuration,
+    Product_File_Path,
     Product_Group,
     Product_Member,
     Product_Type,
     System_Settings,
     Test,
     Test_Type,
-    Product_File_Path
 )
 from dojo.product.queries import (
     get_authorized_global_groups_for_product,

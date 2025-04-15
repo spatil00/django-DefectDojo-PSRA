@@ -1,4 +1,3 @@
-import os
 import base64
 import copy
 import hashlib
@@ -1343,14 +1342,14 @@ class Product_File_Path(models.Model):
     product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
-        related_name="file_paths"
+        related_name="file_paths",
     )
     product_file_path = models.CharField(max_length=1000)
 
     def delete(self, *args, **kwargs):
-        if os.path.exists(self.product_file_path):
-            os.remove(self.product_file_path)
-        super().delete(*args, **kwargs)  
+        if Path(self.product_file_path).exists():
+            Path(self.product_file_path).unlink()
+        super().delete(*args, **kwargs)
 
 
 class Tool_Type(models.Model):
@@ -1521,7 +1520,7 @@ class Engagement(models.Model):
     risk_assessment = models.ManyToManyField("Risk_Assessment",
                                              default=None,
                                              editable=False,
-                                             blank=True),
+                                             blank=True)
     done_testing = models.BooleanField(default=False, editable=False)
     engagement_type = models.CharField(editable=True, max_length=30, default="Interactive",
                                        null=True,
@@ -2637,7 +2636,7 @@ class Finding(models.Model):
 
     tags = TagField(blank=True, force_lowercase=True, help_text=_("Add tags that help describe this finding. Choose from the list or add new tags. Press Enter key to add."))
     inherited_tags = TagField(blank=True, force_lowercase=True, help_text=_("Internal use tags sepcifically for maintaining parity with product. This field will be present as a subset in the tags field"))
-    
+
     SEVERITIES = {"Info": 4, "Low": 3, "Medium": 2,
                   "High": 1, "Critical": 0}
 
@@ -2687,7 +2686,6 @@ class Finding(models.Model):
         self.unsaved_tags = None
         self.unsaved_files = None
         self.unsaved_vulnerability_ids = None
-        
 
     def __str__(self):
         return self.title
@@ -2803,7 +2801,7 @@ class Finding(models.Model):
 
         # if self.risk and not self.risk.assessed_findings.exists():
         #     self.risk.delete()
-        
+
         super().delete(*args, **kwargs)
         with suppress(Test.DoesNotExist, Engagement.DoesNotExist, Product.DoesNotExist):
             # Suppressing a potential issue created from async delete removing
@@ -3018,7 +3016,7 @@ class Finding(models.Model):
         if self.risk_accepted:
             status += ["Risk Accepted"]
         if self.risk_assessed:
-            status +=["Risk Assessed"]
+            status += ["Risk Assessed"]
         if not len(status):
             status += ["Initial"]
 
@@ -3421,9 +3419,9 @@ class Finding(models.Model):
 
 
 class VulnerabilityFinding(Finding):
-        def __init__(self, test=None, vulnerability=None):
-            super().__init__(test=test)
-            self.vulnerability = vulnerability
+    def __init__(self, test=None, vulnerability=None):
+        super().__init__(test=test)
+        self.vulnerability = vulnerability
 
 
 class FindingAdmin(admin.ModelAdmin):
@@ -3683,6 +3681,7 @@ class BurpRawRequestResponse(models.Model):
         # Removes all blank lines
         return re.sub(r"\n\s*\n", "\n", res)
 
+
 class Risk_Assessment(models.Model):
     THREAT_TYPE_CHOICES = [
         ("S", "Spoofing"),
@@ -3719,10 +3718,10 @@ class Risk_Assessment(models.Model):
 
     def __str__(self):
         return self.name
-    
+
     @property
     def finding_mitigation(self):
-        return self._finding_mitigation if hasattr(self, '_finding_mitigation') else None
+        return self._finding_mitigation if hasattr(self, "_finding_mitigation") else None
 
     @finding_mitigation.setter
     def finding_mitigation(self, value):
@@ -3730,12 +3729,12 @@ class Risk_Assessment(models.Model):
 
     @property
     def accept_risk(self):
-        return self._accept_risk if hasattr(self, '_accept_risk') else None
+        return self._accept_risk if hasattr(self, "_accept_risk") else None
 
     @accept_risk.setter
     def accept_risk(self, value):
         self._accept_risk = value
-    
+
 
 class Risk_Acceptance(models.Model):
     TREATMENT_ACCEPT = "A"
