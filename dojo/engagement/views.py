@@ -812,7 +812,7 @@ class ImportScanResultsView(View):
             product_tab = Product_Tab(engagement.product, title="Import Scan Results", tab="engagements")
             product_tab.setEngagement(engagement)
         else:
-            custom_breadcrumb = {"", ""}
+            custom_breadcrumb = {""}
             product_tab = Product_Tab(product, title="Import Scan Results", tab="findings")
         return product_tab, custom_breadcrumb
 
@@ -1710,7 +1710,7 @@ def download_risk_acceptance(request, eid, raid):
         raise PermissionDenied
     response = StreamingHttpResponse(
         FileIterWrapper(
-            open(settings.MEDIA_ROOT + "/" + risk_acceptance.path.name, mode="rb")))
+            (Path(settings.MEDIA_ROOT) / "risk_acceptance.path.name").open(mode="rb")))
     response["Content-Disposition"] = f'attachment; filename="{risk_acceptance.filename()}"'
     mimetype, _encoding = mimetypes.guess_type(risk_acceptance.path.name)
     response["Content-Type"] = mimetype
